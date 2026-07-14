@@ -24,3 +24,24 @@ export function evaluateFlightCase(flightCase: FlightCase): Assessment {
   if (flightCase.disruptionType === "delay" && minutes < 180) return { caseState: "DIFFERENT_ROUTE", frameworkCandidates: ["UK261"], possibleRoutes: ["request_expense_reimbursement"], materialUnknowns: [], exceptionStatus: "NOT_RAISED", ruleIds: ["UK_SCOPE_01"], allowedClaims: ["request_expense_reimbursement"], prohibitedClaims: ["guaranteed_compensation"] };
   return { caseState: "LIKELY_WORTH_PURSUING", frameworkCandidates: ["UK261"], possibleRoutes: vagueReason ? ["compensation_review", "request_reason_detail"] : ["compensation_review"], materialUnknowns, exceptionStatus: vagueReason ? "UNRESOLVED" : "INSUFFICIENT_EVIDENCE", ruleIds: ["UK_SCOPE_01", "UK_DELAY_03", "UK_EXCEPTION_01"], allowedClaims: ["request_reassessment", "request_clarification"], prohibitedClaims: ["guaranteed_compensation"] };
 }
+
+export type CompensationGuide = {
+  amountGbp: number | null;
+  reason: string;
+  sourceUrl: string;
+};
+
+export function calculateUkCompensation(flightCase: FlightCase): CompensationGuide {
+  const get = (field: string) => flightCase.facts.find((item) => item.field === field)?.value;
+  const distance = Number(get("flight_distance_km"));
+  const delay = Number(get("final_arrival_delay_minutes"));
+  const reason = String(get("airline_reason") ?? "");
+  const sourceUrl = "https://www.caa.co.uk/air-passengers/travel-problems-and-rights/flight-delays-and-cancellations/delays/";
+  if (!Number.isFinite(distance) || distance <= 0) return { amountGbp: null, reason: "Momo needs the flight distance before it can show a fixed UK261 amount.", sourceUrl };
+  if (!Number.isFinite(delay) || delay < 180) return { amountGbp: null, reason: "For a delay claim, Momo needs a final-arrival delay of at least three hours before it can show a fixed amount.", sourceUrl };
+  if (/weather|air traffic control|security|extraordinary/i.test(reason)) return { amountGbp: null, reason: "The airline's stated cause may be outside its normal control. Momo will not state a fixed amount until that is resolved.", sourceUrl };
+  if (distance <= 1500) return { amountGbp: 220, reason: "UK CAA guidance lists £220 per person for eligible flights up to 1,500 km.", sourceUrl };
+  if (distance <= 3500) return { amountGbp: 350, reason: "UK CAA guidance lists £350 per person for eligible flights from 1,500 to 3,500 km.", sourceUrl };
+  if (delay < 240) return { amountGbp: 260, reason: "UK CAA guidance lists £260 per person for eligible flights over 3,500 km arriving three to four hours late.", sourceUrl };
+  return { amountGbp: 520, reason: "UK CAA guidance lists £520 per person for eligible flights over 3,500 km arriving more than four hours late.", sourceUrl };
+}
