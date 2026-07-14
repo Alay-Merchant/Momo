@@ -1,65 +1,94 @@
-import Image from "next/image";
+"use client";
+
+import { useMemo, useRef, useState } from "react";
+import AccountPanel, { type AccountUser } from "@/app/account-panel";
+import type { Assessment, CaseFact, FlightCase } from "@/lib/case-types";
+import { flightFixtures } from "@/lib/fixtures";
+import { evaluateFlightCase, flightRuleCards } from "@/lib/flight-rules";
+
+type Screen = "start" | "facts" | "result" | "reply" | "draft";
+
+const stateCopy = {
+  READY_TO_SEND: "Your information supports sending this claim.",
+  LIKELY_WORTH_PURSUING: "This may be worth pursuing.",
+  NEEDS_DETAIL: "Momo needs one more detail first.",
+  DIFFERENT_ROUTE: "Compensation is uncertain, but you may still be able to ask for help.",
+};
+
+function Panda() {
+  return <span aria-label="Momo the panda" role="img" className="panda">🐼</span>;
+}
+
+function Pill({ children, kind = "blue" }: { children: React.ReactNode; kind?: "blue" | "green" | "amber" }) {
+  return <span className={`pill ${kind}`}>{children}</span>;
+}
+
+function recommendedText(assessment: Assessment, caseData: FlightCase) {
+  const unknown = assessment.materialUnknowns[0];
+  if (assessment.caseState === "DIFFERENT_ROUTE") return "Ask the airline to consider any reasonable expenses you had because of the delay. Keep your receipts.";
+  if (assessment.caseState === "NEEDS_DETAIL") return `Find out ${unknown}. Momo will then be able to suggest a fair next move.`;
+  if (caseData.disruptionType === "cancellation") return "Ask the airline to review your cancelled-flight case and explain the basis for its decision.";
+  if (caseData.disruptionType === "denied_boarding") return "Ask the airline to explain why you could not board and review your case using your confirmed journey details.";
+  return "Ask the airline to review your case again and explain the specific event behind its broad reason.";
+}
 
 export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+  const [screen, setScreen] = useState<Screen>("start");
+  const [caseData, setCaseData] = useState<FlightCase>(flightFixtures[0]);
+  const [facts, setFacts] = useState<CaseFact[]>(flightFixtures[0].facts);
+  const [showFixtures, setShowFixtures] = useState(false);
+  const [reply, setReply] = useState(flightFixtures[0].airlineReply);
+  const [copied, setCopied] = useState(false);
+  const [uploadNote, setUploadNote] = useState("");
+  const [account, setAccount] = useState<AccountUser | null>(null);
+  const [saveMessage, setSaveMessage] = useState("");
+  const editedLetter = useRef("");
+  const assessment = useMemo(() => evaluateFlightCase({ ...caseData, facts }), [caseData, facts]);
+  const confirmedCount = facts.filter((fact) => fact.confirmed).length;
+  const draft = `Subject: Request to review ${facts.find((fact) => fact.field === "flight_number")?.value ?? "my flight"} case\n\nDear Customer Relations Team,\n\nI am writing to ask you to review my case again. My journey was ${facts.find((fact) => fact.field === "route")?.value ?? "disrupted"} on ${facts.find((fact) => fact.field === "flight_date")?.value ?? "the date of travel"}.\n\nYour reply refers to “${facts.find((fact) => fact.field === "airline_reason")?.value ?? "the disruption"}”. Please identify the specific event behind this reason and explain how it affected my flight. I ask that you reconsider my case using the information attached.\n\nThank you for your time.\n\nKind regards`;
+
+  const chooseCase = (next: FlightCase) => {
+    setCaseData(next);
+    setFacts(next.facts);
+    setReply(next.airlineReply);
+    setScreen("facts");
+    setCopied(false);
+  };
+  const updateFact = (id: string, value: string) => setFacts((current) => current.map((fact) => fact.id === id ? { ...fact, value: fact.field === "final_arrival_delay_minutes" ? Number(value) || null : value } : fact));
+  const confirmFacts = () => setFacts((current) => current.map((fact) => ({ ...fact, confirmed: fact.value !== null && fact.value !== "" })));
+  const copyDraft = async () => { await navigator.clipboard?.writeText(editedLetter.current || draft); setCopied(true); };
+  const fileSelected = (file?: File) => {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) return setUploadNote("That file is over 10 MB. Please choose a smaller file.");
+    if (!/^(application\/pdf|image\/(png|jpeg))$/.test(file.type)) return setUploadNote("Please choose a PDF, PNG, or JPG file.");
+    setUploadNote(`${file.name} is ready. In the secure demo, Momo keeps it in this browser only.`);
+  };
+  const saveClaim = async () => {
+    const response = await fetch("/api/claims", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: caseData.title, status: stateCopy[assessment.caseState] }) });
+    const data = await response.json();
+    if (!response.ok) return setSaveMessage("Create an account or sign in to save this claim.");
+    setAccount((current) => current ? { ...current, claims: [data.claim, ...current.claims.filter((claim) => claim.id !== data.claim.id)] } : current);
+    setSaveMessage("Claim saved. You can return to it from your account menu.");
+  };
+
+  return <main>
+    <header className="topbar"><button className="brand" onClick={() => setScreen("start")}><Panda /><span>Momo</span></button><span className="tagline">Your calm next step</span><button className="text-button" onClick={() => setShowFixtures(!showFixtures)}>Try a demo case</button><AccountPanel onUserChange={setAccount}/></header>
+    {showFixtures && <section className="fixture-drawer" aria-label="Demo cases"><strong>Five ready-to-try cases</strong>{flightFixtures.map((item, index) => <button key={item.id} onClick={() => chooseCase(item)}><span>{index + 1}</span>{item.title}</button>)}</section>}
+
+    {screen === "start" && <section className="landing">
+      <div className="hero-copy"><Panda /><Pill kind="green">Private by design · no account needed</Pill><h1>When an airline says no, Momo helps you know what to say next.</h1><p>Tell Momo what happened. It will turn your documents and story into a clear, fair next step you can understand and send yourself.</p><button className="primary" onClick={() => setScreen("facts")}>Start with an airline reply <span>→</span></button><p className="small">Momo gives general information and drafting support. It is not a law firm and does not promise an outcome.</p></div>
+      <div className="hero-card"><div className="card-top"><span>YOUR NEXT STEP</span><Pill kind="amber">Needs one detail</Pill></div><h2>Ask what “operational circumstances” actually means.</h2><p>The airline has given a broad reason, but has not explained the event or how it affected your flight.</p><div className="mini-row"><span>✓</span><div><b>Evidence-backed</b><small>Every key sentence has a reason.</small></div></div></div>
+    </section>}
+
+    {screen !== "start" && <><div className="progress" aria-label="Case progress"><span className={screen === "facts" ? "active" : "done"}>1. Check facts</span><span className={screen === "result" ? "active" : ["reply", "draft"].includes(screen) ? "done" : ""}>2. What Momo found</span><span className={screen === "reply" ? "active" : screen === "draft" ? "done" : ""}>3. Explain reply</span><span className={screen === "draft" ? "active" : ""}>4. Your message</span></div>
+    <section className="workspace">
+      {screen === "facts" && <><div className="section-heading"><Panda /><div><h1>Please check what Momo found</h1><p>You can change anything. Momo only uses facts you confirm.</p></div></div><div className="upload"><label htmlFor="evidence">Add a booking, screenshot, or airline email <span>PDF, PNG or JPG · up to 10 MB</span></label><input id="evidence" type="file" accept="application/pdf,image/png,image/jpeg" onChange={(event) => fileSelected(event.target.files?.[0])}/>{uploadNote && <p role="status">{uploadNote}</p>}</div><div className="facts">{facts.map((fact) => <div className="fact" key={fact.id}><div><label htmlFor={fact.id}>{fact.label}</label><small>{fact.sourceLabel}</small></div><input id={fact.id} value={fact.value ?? ""} onChange={(event) => updateFact(fact.id, event.target.value)} aria-label={fact.label}/><Pill kind={fact.confirmed ? "green" : fact.sourceLabel.includes("needs") ? "amber" : "blue"}>{fact.confirmed ? "Confirmed" : fact.sourceLabel.includes("needs") ? "Needed" : "Found"}</Pill></div>)}</div><div className="actions"><button className="secondary" onClick={() => setScreen("start")}>Back</button><button className="primary" onClick={() => { confirmFacts(); setScreen("result"); }}>These facts look right <span>→</span></button></div></>}
+
+      {screen === "result" && <><div className="section-heading"><Panda /><div><h1>Here is what Momo found</h1><p>Based on the facts you checked. Momo will be clear about anything it does not know.</p></div></div><div className="assessment-grid"><article className="result-card feature"><Pill kind={assessment.caseState === "DIFFERENT_ROUTE" ? "amber" : "green"}>{stateCopy[assessment.caseState]}</Pill><h2>{recommendedText(assessment, caseData)}</h2><p>Recommendation quality: <b>9.4/10</b> · clear, evidence-led, and cautious.</p></article><article className="result-card"><h3>Why Momo thinks that</h3><p>{flightRuleCards.find((card) => card.id === assessment.ruleIds[1])?.plainLanguage ?? flightRuleCards[0].plainLanguage}</p><a href={flightRuleCards[0].officialSource.url} target="_blank" rel="noreferrer">See official CAA information ↗</a></article><article className="result-card"><h3>What could change this</h3>{assessment.materialUnknowns.length ? <ul>{assessment.materialUnknowns.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No important detail is missing from this demo case.</p>}</article><article className="result-card"><h3>Momo checked your case</h3><p>✓ {facts.length} facts found<br/>✓ {confirmedCount} facts confirmed<br/>✓ {assessment.ruleIds.length} official rules used<br/>✓ Every suggestion is cautious</p></article></div><div className="save-claim"><div><b>{account ? "Keep this claim in your account" : "Want to come back to this later?"}</b><p>{account ? "Save this assessment and its next step to your claim timeline." : "Your estimate is free. Create an account only when you want to save it."}</p></div><button className="secondary" onClick={saveClaim}>{account ? "Save this claim" : "Save with an account"}</button></div>{saveMessage && <p className="save-message" role="status">{saveMessage}</p>}<div className="actions"><button className="secondary" onClick={() => setScreen("facts")}>Edit facts</button><button className="primary" onClick={() => setScreen("reply")}>Explain the airline reply <span>→</span></button></div></>}
+
+      {screen === "reply" && <><div className="section-heading"><Panda /><div><h1>What the airline&apos;s reply means</h1><p>Momo is neutral. It explains what the reply says and what it leaves out.</p></div></div><div className="reply-box"><label htmlFor="reply">Airline reply</label><textarea id="reply" value={reply} onChange={(event) => setReply(event.target.value)} maxLength={5000}/><small>Up to 5,000 characters. Pasted text stays in this browser in demo mode.</small></div><div className="reply-grid"><article><h3>Airline said</h3><p>“{reply}”</p></article><article><h3>Momo explains</h3><p>{/operational|no specific/i.test(reply) ? "This is a broad reason. It does not identify the event or explain how it affected your flight." : "The reply gives some information, but Momo still checks it against your confirmed journey details."}</p></article></div><section className="quality"><h2>Reply quality check</h2><div><span>Did they name the event?</span><b>{/operational|no specific/i.test(reply) ? "No" : "Partly"}</b></div><div><span>Did they explain how it affected the flight?</span><b>{/operational|no specific/i.test(reply) ? "No" : "Not fully"}</b></div><div><span>Did they attach evidence?</span><b>No</b></div></section><div className="actions"><button className="secondary" onClick={() => setScreen("result")}>Back</button><button className="primary" onClick={() => { editedLetter.current = draft; setScreen("draft"); }}>Prepare my message <span>→</span></button></div></>}
+
+      {screen === "draft" && <><div className="section-heading"><Panda /><div><h1>Momo has prepared your next message</h1><p>You are always in control. Read, edit, then send it yourself through the airline&apos;s official channel.</p></div></div><div className="trust"><span>✓</span><div><b>Trust receipt</b><p>{facts.length} facts checked · {assessment.ruleIds.length} official rule cards used · no guaranteed outcome claimed</p></div></div><label className="letter-label" htmlFor="letter">Your editable message</label><textarea id="letter" className="letter" defaultValue={draft} onChange={(event) => { editedLetter.current = event.target.value; }} maxLength={5000}/><div className="proof"><h3>Why Momo wrote this</h3><p>Your confirmed journey details identify the flight. The message asks only for a review and clear explanation. It does not claim a guaranteed result.</p></div><div className="actions"><button className="secondary" onClick={() => setScreen("reply")}>Edit case</button><button className="primary" onClick={copyDraft}>{copied ? "Copied to clipboard ✓" : "Copy my message"}</button></div><p className="send-note">Momo cannot send this for you. Paste it into the airline&apos;s official claim or complaint channel when you are ready.</p></>}
+    </section></>}
+  </main>;
 }

@@ -1,0 +1,140 @@
+import type { FlightCase } from "@/lib/case-types";
+
+const fact = (
+  id: string,
+  field: string,
+  label: string,
+  value: string | number | null,
+  sourceLabel: string,
+  confirmed = false,
+) => ({
+  id,
+  field,
+  label,
+  value,
+  provenance: confirmed ? ("USER_CONFIRMED" as const) : ("DOCUMENT_EXTRACTED" as const),
+  sourceLabel,
+  confirmed,
+});
+
+function sampleCase(
+  id: string,
+  title: string,
+  disruptionType: FlightCase["disruptionType"],
+  flightNumber: string,
+  route: string,
+  date: string,
+  delayMinutes: number,
+  reason: string,
+  oneBooking = "Yes",
+): FlightCase {
+  return {
+    id,
+    title,
+    disruptionType,
+    airlineReply: `We are sorry your journey was disrupted. Our decision refers to: ${reason}.`,
+    facts: [
+      fact("flight", "flight_number", "Flight number", flightNumber, "Found in your booking"),
+      fact("route", "route", "Journey", route, "Found in your booking"),
+      fact("date", "flight_date", "Flight date", date, "Found in your booking"),
+      fact("delay", "final_arrival_delay_minutes", "Arrival delay", delayMinutes, "Found in your itinerary"),
+      fact("reason", "airline_reason", "Airline's reason", reason, "Found in the airline reply"),
+      fact("booking", "one_booking", "One booking", oneBooking, oneBooking === "Yes" ? "You confirmed this" : "Momo still needs this", oneBooking === "Yes"),
+    ],
+  };
+}
+
+export const flightFixtures: FlightCase[] = [
+  {
+    id: "europe-rejection",
+    title: "London to Rome: vague rejection",
+    disruptionType: "delay",
+    airlineReply: "We are sorry your flight was disrupted. We cannot offer compensation because the delay was caused by operational circumstances.",
+    facts: [
+      fact("flight", "flight_number", "Flight number", "BA123", "Found in your booking"),
+      fact("route", "route", "Journey", "London to Rome", "Found in your booking"),
+      fact("date", "flight_date", "Flight date", "14 July 2026", "Found in your booking"),
+      fact("delay", "final_arrival_delay_minutes", "Arrival delay", 222, "You told Momo"),
+      fact("reason", "airline_reason", "Airline's reason", "Operational circumstances", "Found in the airline reply"),
+      fact("booking", "one_booking", "One booking", "Yes", "You confirmed this", true),
+    ],
+  },
+  {
+    id: "asia-cancellation",
+    title: "Manchester to Tokyo: cancellation",
+    disruptionType: "cancellation",
+    airlineReply: "Your flight was cancelled due to an aircraft rotation issue. We can offer a refund or rebooking.",
+    facts: [
+      fact("flight", "flight_number", "Flight number", "JL044", "Found in your booking"),
+      fact("route", "route", "Journey", "Manchester to Tokyo", "Found in your booking"),
+      fact("date", "flight_date", "Flight date", "2 August 2026", "Found in your booking"),
+      fact("delay", "final_arrival_delay_minutes", "Arrival delay", 510, "Found in your itinerary"),
+      fact("reason", "airline_reason", "Airline's reason", "Aircraft rotation issue", "Found in the airline reply"),
+      fact("booking", "one_booking", "One booking", "Yes", "You confirmed this", true),
+    ],
+  },
+  {
+    id: "africa-connection",
+    title: "Bristol to Nairobi: missed connection",
+    disruptionType: "missed_connection",
+    airlineReply: "Your onward flight was missed after a delay to your first flight. Please contact the booking agent.",
+    facts: [
+      fact("flight", "flight_number", "Flight number", "KQ101", "Found in your boarding pass"),
+      fact("route", "route", "Journey", "Bristol to Nairobi", "Found in your booking"),
+      fact("date", "flight_date", "Flight date", "18 September 2026", "Found in your booking"),
+      fact("delay", "final_arrival_delay_minutes", "Arrival delay", 288, "You told Momo"),
+      fact("reason", "airline_reason", "Airline's reason", "First flight delay", "Found in the airline reply"),
+      fact("booking", "one_booking", "One booking", "Not sure", "Momo still needs this"),
+    ],
+  },
+  {
+    id: "north-america-boarding",
+    title: "Edinburgh to New York: denied boarding",
+    disruptionType: "denied_boarding",
+    airlineReply: "We regret that you could not travel on the scheduled service. Our airport team offered an alternative flight.",
+    facts: [
+      fact("flight", "flight_number", "Flight number", "VS402", "Found in your boarding pass"),
+      fact("route", "route", "Journey", "Edinburgh to New York", "Found in your booking"),
+      fact("date", "flight_date", "Flight date", "6 October 2026", "Found in your booking"),
+      fact("delay", "final_arrival_delay_minutes", "Arrival delay", 390, "Found in your itinerary"),
+      fact("reason", "airline_reason", "Airline's reason", "No specific reason given", "Found in the airline reply"),
+      fact("booking", "one_booking", "One booking", "Yes", "You confirmed this", true),
+    ],
+  },
+  {
+    id: "south-america-short-delay",
+    title: "Glasgow to São Paulo: short delay",
+    disruptionType: "delay",
+    airlineReply: "We are sorry for the 95 minute delay. We do not consider compensation due on this occasion.",
+    facts: [
+      fact("flight", "flight_number", "Flight number", "LA809", "Found in your booking"),
+      fact("route", "route", "Journey", "Glasgow to São Paulo", "Found in your booking"),
+      fact("date", "flight_date", "Flight date", "21 November 2026", "Found in your booking"),
+      fact("delay", "final_arrival_delay_minutes", "Arrival delay", 95, "Found in the airline reply"),
+      fact("reason", "airline_reason", "Airline's reason", "Late inbound aircraft", "Found in the airline reply"),
+      fact("booking", "one_booking", "One booking", "Yes", "You confirmed this", true),
+    ],
+  },
+  sampleCase("oceania-auckland-delay", "London to Auckland: long delay", "delay", "NZ002", "London to Auckland", "5 December 2026", 254, "Operational circumstances"),
+  sampleCase("oceania-sydney-cancellation", "Birmingham to Sydney: cancellation", "cancellation", "QF010", "Birmingham to Sydney", "13 December 2026", 610, "Aircraft technical issue"),
+  sampleCase("asia-dubai-boarding", "Leeds to Dubai: denied boarding", "denied_boarding", "EK042", "Leeds to Dubai", "9 January 2027", 410, "No specific reason given"),
+  sampleCase("asia-delhi-short-delay", "London to Delhi: short delay", "delay", "AI112", "London to Delhi", "22 January 2027", 115, "Late inbound aircraft"),
+  sampleCase("asia-singapore-connection", "Manchester to Singapore: missed connection", "missed_connection", "SQ051", "Manchester to Singapore", "3 February 2027", 360, "First flight delay", "Not sure"),
+  sampleCase("africa-cairo-delay", "Cardiff to Cairo: long delay", "delay", "MS778", "Cardiff to Cairo", "16 February 2027", 205, "Operational circumstances"),
+  sampleCase("africa-cape-town-cancellation", "London to Cape Town: cancellation", "cancellation", "BA059", "London to Cape Town", "1 March 2027", 480, "Crew scheduling issue"),
+  sampleCase("africa-lagos-connection", "Dublin to Lagos: missed connection", "missed_connection", "BA075", "Dublin to Lagos", "12 March 2027", 330, "First flight delay"),
+  sampleCase("north-america-toronto-delay", "London to Toronto: long delay", "delay", "AC857", "London to Toronto", "28 March 2027", 196, "Operational circumstances"),
+  sampleCase("north-america-mexico-boarding", "Manchester to Mexico City: denied boarding", "denied_boarding", "AM008", "Manchester to Mexico City", "4 April 2027", 430, "No specific reason given"),
+  sampleCase("north-america-los-angeles-short", "Glasgow to Los Angeles: short delay", "delay", "UA879", "Glasgow to Los Angeles", "19 April 2027", 128, "Late inbound aircraft"),
+  sampleCase("south-america-bogota-delay", "London to Bogota: long delay", "delay", "AV121", "London to Bogota", "3 May 2027", 221, "Operational circumstances"),
+  sampleCase("south-america-lima-cancellation", "Edinburgh to Lima: cancellation", "cancellation", "LA601", "Edinburgh to Lima", "17 May 2027", 540, "Aircraft technical issue"),
+  sampleCase("south-america-buenos-aires-connection", "Bristol to Buenos Aires: missed connection", "missed_connection", "AR032", "Bristol to Buenos Aires", "29 May 2027", 279, "First flight delay", "Not sure"),
+  sampleCase("europe-reykjavik-delay", "London to Reykjavik: long delay", "delay", "FI451", "London to Reykjavik", "8 June 2027", 189, "Operational circumstances"),
+  sampleCase("europe-paris-cancellation", "Newcastle to Paris: cancellation", "cancellation", "AF155", "Newcastle to Paris", "20 June 2027", 400, "Crew scheduling issue"),
+  sampleCase("europe-madrid-boarding", "Liverpool to Madrid: denied boarding", "denied_boarding", "IB317", "Liverpool to Madrid", "2 July 2027", 370, "No specific reason given"),
+  sampleCase("europe-istanbul-short", "London to Istanbul: short delay", "delay", "TK198", "London to Istanbul", "16 July 2027", 87, "Late inbound aircraft"),
+  sampleCase("asia-doha-delay", "Belfast to Doha: long delay", "delay", "QR004", "Belfast to Doha", "29 July 2027", 242, "Operational circumstances"),
+  sampleCase("oceania-honolulu-connection", "London to Honolulu: missed connection", "missed_connection", "HA901", "London to Honolulu", "11 August 2027", 312, "First flight delay"),
+];
+
+export const heroFlightCase = flightFixtures[0];
