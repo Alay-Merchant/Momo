@@ -19,6 +19,7 @@ export default function AccountPanel({ onUserChange }: { onUserChange: (user: Ac
     const response = await fetch(`/api/auth/${mode === "login" ? "login" : "register"}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }) });
     const data = await response.json();
     if (!response.ok) return setMessage(data.error ?? "Something went wrong. Please try again.");
+    if (data.needsEmailConfirmation) return setMessage(data.message ?? "Check your email to confirm your account, then sign in.");
     update(data.user); setOpen(false); setPassword("");
   };
   const logout = async () => { await fetch("/api/auth/logout", { method: "POST" }); update(null); };

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cleanEmail, createSession, rateLimit, register, sessionCookie, sessionCookieOptions, validPassword } from "@/lib/auth-store";
+import { cleanEmail, rateLimit, validPassword } from "@/lib/auth-store";
+import { createSupabaseRouteClient, userPayload } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
@@ -8,9 +9,13 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const email = cleanEmail(body?.email);
   if (!email || !validPassword(body?.password)) return NextResponse.json({ error: "Use a valid email and a password of at least 12 characters." }, { status: 400 });
-  const user = await register(email, body.password);
-  if (!user) return NextResponse.json({ error: "An account already exists for this email. Try signing in." }, { status: 409 });
-  const response = NextResponse.json({ user: { email: user.email, claims: user.claims } }, { status: 201 });
-  response.cookies.set(sessionCookie.name, createSession(user.id), sessionCookieOptions(request.headers.get("x-forwarded-proto") ?? request.nextUrl.protocol.replace(":", "")));
-  return response;
+  const response = NextResponse.json({ ok: true }, { status: 201 });
+  const supabase = createSupabaseRouteClient(request, response);
+  const { data, error } = await supabase.auth.signUp({ email, password: body.password, options: { emailRedirectTo: new URL("/", request.url).origin } });
+  if (error) {
+    const isEmailRateLimit = /rate limit|too many requests/i.test(error.message);
+    return NextResponse.json({ error: isEmailRateLimit ? "Supabase has temporarily paused confirmation emails. For local testing, turn off Confirm email in Supabase Authentication → Providers → Email, then try again." : error.message }, { status: isEmailRateLimit ? 429 : 400 });
+  }
+  if (!data.session || !data.user) return NextResponse.json({ needsEmailConfirmation: true, message: "Check your email to confirm your account, then sign in." }, { status: 202 });
+  return NextResponse.json({ user: await userPayload(supabase, data.user) }, { status: 201, headers: response.headers });
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import AccountPanel, { type AccountUser } from "@/app/account-panel";
 import type { Assessment, CaseFact, FlightCase } from "@/lib/case-types";
 import { flightFixtures } from "@/lib/fixtures";
@@ -37,7 +38,6 @@ export default function Home() {
   const [screen, setScreen] = useState<Screen>("start");
   const [caseData, setCaseData] = useState<FlightCase>(flightFixtures[0]);
   const [facts, setFacts] = useState<CaseFact[]>(flightFixtures[0].facts);
-  const [showFixtures, setShowFixtures] = useState(false);
   const [reply, setReply] = useState(flightFixtures[0].airlineReply);
   const [replyHistory, setReplyHistory] = useState<ReplyEvent[]>([]);
   const [copied, setCopied] = useState(false);
@@ -94,12 +94,11 @@ export default function Home() {
   };
 
   return <main>
-    <header className="topbar"><button className="brand" onClick={() => setScreen("start")}><Panda /><span>Momo</span></button><span className="tagline">Your calm next step</span><button className="text-button" onClick={() => setShowFixtures(!showFixtures)}>Try a demo case</button><AccountPanel onUserChange={setAccount}/></header>
-    {showFixtures && <section className="fixture-drawer" aria-label="Demo cases"><strong>Five ready-to-try cases</strong>{flightFixtures.map((item, index) => <button key={item.id} onClick={() => chooseCase(item)}><span>{index + 1}</span>{item.title}</button>)}</section>}
+    <header className="topbar"><button className="brand" onClick={() => setScreen("start")}><Panda /><span>Momo</span></button><span className="tagline">Your calm next step</span><Link className="text-button" href="/help">What can I help with?</Link><AccountPanel onUserChange={setAccount}/></header>
 
     {screen === "start" && <section className="landing">
-      <div className="hero-copy"><Panda /><Pill kind="green">Private by design · no account needed</Pill><h1>When an airline says no, Momo helps you know what to say next.</h1><p>Tell Momo what happened. It will turn your documents and story into a clear, fair next step you can understand and send yourself.</p><button className="primary" onClick={() => setScreen("facts")}>Start with an airline reply <span>→</span></button><p className="small">Momo gives general information and drafting support. It is not a law firm and does not promise an outcome.</p></div>
-      <div className="hero-card"><div className="card-top"><span>YOUR NEXT STEP</span><Pill kind="amber">Needs one detail</Pill></div><h2>Ask what “operational circumstances” actually means.</h2><p>The airline has given a broad reason, but has not explained the event or how it affected your flight.</p><div className="mini-row"><span>✓</span><div><b>Evidence-backed</b><small>Every key sentence has a reason.</small></div></div></div>
+      <div className="hero-copy"><div className="momo-welcome"><Panda /><span className="speech">Hello, I&apos;m Momo. What happened?</span></div><Pill kind="green">Private by design · no account needed</Pill><h1>A calm guide when your flight does not go to plan.</h1><p>Start with what you know. Momo turns your story and airline messages into a clear next step, at your pace.</p><div className="hero-actions"><button className="primary" onClick={() => setScreen("facts")}>Tell Momo what happened <span>→</span></button><button className="secondary" onClick={() => chooseCase(flightFixtures[0])}>Show me an example</button></div><p className="small">Momo gives general information and drafting support. It is not a law firm and does not promise an outcome.</p></div>
+      <div className="hero-card welcome-scene"><div className="paper-plane">✈</div><div className="bamboo bamboo-one">🎋</div><div className="bamboo bamboo-two">🎋</div><div className="scene-path"><span>1</span><i></i><span>2</span><i></i><span>3</span></div><h2>One small step at a time.</h2><p>Tell Momo what happened. Add the airline&apos;s reply. Then see what to do next.</p><div className="mini-row"><span>✓</span><div><b>You stay in control</b><small>Momo never sends anything for you.</small></div></div></div>
     </section>}
 
     {screen !== "start" && <><div className="progress" aria-label="Case progress"><span className={screen === "facts" ? "active" : "done"}>1. Check facts</span><span className={screen === "result" ? "active" : ["reply", "draft"].includes(screen) ? "done" : ""}>2. What Momo found</span><span className={screen === "reply" ? "active" : screen === "draft" ? "done" : ""}>3. Explain reply</span><span className={screen === "draft" ? "active" : ""}>4. Your message</span></div>

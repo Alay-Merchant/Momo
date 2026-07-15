@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticate, cleanEmail, createSession, rateLimit, sessionCookie, sessionCookieOptions } from "@/lib/auth-store";
+import { cleanEmail, rateLimit } from "@/lib/auth-store";
+import { createSupabaseRouteClient, userPayload } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
@@ -7,9 +8,10 @@ export async function POST(request: NextRequest) {
   if (!rateLimit(`login:${ip}`)) return NextResponse.json({ error: "Please wait before trying again." }, { status: 429 });
   const body = await request.json().catch(() => null);
   const email = cleanEmail(body?.email);
-  const user = email && typeof body?.password === "string" ? await authenticate(email, body.password) : null;
-  if (!user) return NextResponse.json({ error: "Email or password was not recognised." }, { status: 401 });
-  const response = NextResponse.json({ user: { email: user.email, claims: user.claims } });
-  response.cookies.set(sessionCookie.name, createSession(user.id), sessionCookieOptions(request.headers.get("x-forwarded-proto") ?? request.nextUrl.protocol.replace(":", "")));
-  return response;
+  if (!email || typeof body?.password !== "string") return NextResponse.json({ error: "Email or password was not recognised." }, { status: 401 });
+  const response = NextResponse.json({ ok: true });
+  const supabase = createSupabaseRouteClient(request, response);
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password: body.password });
+  if (error || !data.user) return NextResponse.json({ error: "Email or password was not recognised." }, { status: 401 });
+  return NextResponse.json({ user: await userPayload(supabase, data.user) }, { headers: response.headers });
 }
