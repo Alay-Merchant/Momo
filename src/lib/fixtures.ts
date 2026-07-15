@@ -53,6 +53,9 @@ export const flightFixtures: FlightCase[] = [
     facts: [
       fact("flight", "flight_number", "Flight number", "BA123", "Found in your booking"),
       fact("route", "route", "Journey", "London to Rome", "Found in your booking"),
+      fact("departure-region", "departure_region", "Where did your journey start?", "UK", "Confirmed for this sample", true),
+      fact("arrival-region", "arrival_region", "Where was your final destination?", "EU/EEA/Switzerland", "Confirmed for this sample", true),
+      fact("operating-carrier-region", "operating_carrier_region", "Where is the operating airline based?", "UK", "Confirmed for this sample", true),
       fact("date", "flight_date", "Flight date", "14 July 2026", "Found in your booking"),
       fact("delay", "final_arrival_delay_minutes", "Arrival delay", 222, "You told Momo"),
       fact("reason", "airline_reason", "Airline's reason", "Operational circumstances", "Found in the airline reply"),
@@ -148,10 +151,22 @@ export function createBlankFlightCase(): FlightCase {
     facts: [
       fact("flight", "flight_number", "Flight number", null, "You tell Momo", false),
       fact("route", "route", "Journey", null, "You tell Momo", false),
+      fact("departure-airport", "departure_airport", "Which airport did you leave from? (optional 3-letter code)", null, "For example: LHR, MAN, CDG", false),
+      fact("arrival-airport", "arrival_airport", "Where did you finally arrive? (optional 3-letter code)", null, "For example: FCO, JFK, AMS", false),
+      fact("departure-region", "departure_region", "Where did your journey start?", null, "Choose UK, EU/EEA/Switzerland, or another country", false),
+      fact("arrival-region", "arrival_region", "Where was your final destination?", null, "Choose UK, EU/EEA/Switzerland, or another country", false),
+      fact("operating-carrier-region", "operating_carrier_region", "Where is the operating airline based?", null, "Use the airline that flew the disrupted flight", false),
+      fact("operating-carrier-name", "operating_carrier_name", "Which airline actually operated the disrupted flight?", null, "This may differ from the airline you booked with", false),
+      fact("intra-eu", "journey_is_intra_eu", "Did your whole journey stay within the EU/EEA/Switzerland?", null, "Only needed for some long EU journeys", false),
       fact("date", "flight_date", "Flight date", null, "You tell Momo", false),
       fact("delay", "final_arrival_delay_minutes", "Arrival delay", null, "You tell Momo", false),
       fact("reason", "airline_reason", "Airline's reason", null, "You can add this later", false),
       fact("booking", "one_booking", "Were all flights on one booking?", "Not sure", "You tell Momo", false),
+      fact("cancellation-notice", "cancellation_notice_days", "For a cancellation: how many days before departure were you told?", null, "Only needed if your flight was cancelled", false),
+      fact("rerouting-delay", "rerouting_arrival_delay_minutes", "For a cancellation: how late did the replacement flight arrive?", null, "Only needed if you took a replacement flight", false),
+      fact("boarding-ready", "boarding_ready", "For denied boarding: were you at the gate on time with a valid ticket?", null, "Only needed if you were denied boarding", false),
+      fact("boarding-voluntary", "denied_boarding_voluntary", "For denied boarding: did you volunteer to give up your seat?", null, "Only needed if you were denied boarding", false),
+      fact("documents-valid", "travel_documents_valid", "For denied boarding: were your travel documents valid?", null, "Only needed if you were denied boarding", false),
     ],
   };
 }

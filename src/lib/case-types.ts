@@ -2,7 +2,8 @@ export type CaseState =
   | "READY_TO_SEND"
   | "LIKELY_WORTH_PURSUING"
   | "NEEDS_DETAIL"
-  | "DIFFERENT_ROUTE";
+  | "DIFFERENT_ROUTE"
+  | "OUT_OF_SCOPE";
 
 export type ProvenanceType =
   | "DOCUMENT_EXTRACTED"
@@ -36,6 +37,9 @@ export interface RuleCard {
     url: string;
     reviewedAt: string;
   };
+  version?: string;
+  status?: "in_force" | "under_review" | "superseded";
+  reviewDueAt?: string;
 }
 
 export interface FlightCase {
@@ -55,4 +59,5 @@ export interface Assessment {
   ruleIds: string[];
   allowedClaims: string[];
   prohibitedClaims: string[];
+  sourceCardIds?: string[];
 }

@@ -2,10 +2,14 @@ import "server-only";
 import OpenAI from "openai";
 
 export type MomoProvider = "ollama" | "gemini" | "openai" | "demo";
+export type MomoAnalysisTier = "quick" | "deep";
 
 function selectedProvider(): MomoProvider {
   const configured = process.env.MOMO_AI_PROVIDER;
-  if (configured === "ollama" || configured === "gemini" || configured === "openai" || configured === "demo") return configured;
+  if (configured === "openai" || configured === "ollama" || configured === "demo") return configured;
+  if (configured === "gemini" && process.env.MOMO_GEMINI_FALLBACK === "true") return "gemini";
+  if (process.env.OPENAI_API_KEY) return "openai";
+  if (process.env.MOMO_GEMINI_FALLBACK === "true" && process.env.GEMINI_API_KEY) return "gemini";
   return process.env.NODE_ENV === "production" ? "demo" : "ollama";
 }
 
@@ -20,27 +24,39 @@ function localOllamaUrl() {
   return new URL("/api/generate", url);
 }
 
-export async function generateMomoReply(system: string, prompt: string) {
+function openAiModelFor(tier: MomoAnalysisTier) {
+  if (tier === "quick") return process.env.MOMO_OPENAI_QUICK_MODEL ?? "gpt-5.6-luna";
+  return process.env.MOMO_OPENAI_DEEP_MODEL ?? process.env.MOMO_OPENAI_MODEL ?? "gpt-5.6-terra";
+}
+
+export async function generateMomoReply(system: string, prompt: string, tier: MomoAnalysisTier = "quick") {
   const provider = selectedProvider();
-  if (provider === "demo") return { provider, text: demoReply() };
+  if (provider === "demo") return { provider, text: demoReply(), usage: null };
   if (provider === "openai") {
     if (!process.env.OPENAI_API_KEY) throw new Error("OpenAI is not configured.");
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const response = await client.responses.create({ model: "gpt-5.6-terra", max_output_tokens: 700, input: [{ role: "developer", content: system }, { role: "user", content: prompt }] });
-    return { provider, text: response.output_text };
+    try {
+      const response = await client.responses.create({ model: openAiModelFor(tier), max_output_tokens: tier === "quick" ? 140 : 180, input: [{ role: "developer", content: system }, { role: "user", content: prompt }] });
+      return { provider, text: response.output_text, usage: response.usage ? { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens } : null };
+    } catch (error) {
+      if (process.env.MOMO_GEMINI_FALLBACK !== "true" || !process.env.GEMINI_API_KEY) throw error;
+      return generateGeminiReply(system, prompt);
+    }
   }
-  if (provider === "gemini") {
+  if (provider === "gemini") return generateGeminiReply(system, prompt);
+  const response = await fetch(localOllamaUrl(), { method: "POST", signal: AbortSignal.timeout(60_000), headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: process.env.OLLAMA_MODEL ?? "llama3.2:3b", prompt: `${system}\n\n${prompt}`, stream: false, format: "json", options: { num_predict: 350, temperature: 0.2 } }) });
+  const data = await response.json().catch(() => null) as { response?: string; error?: string } | null;
+  if (!response.ok || !data?.response) throw new Error(data?.error ?? "Ollama could not generate a reply. Run: ollama pull llama3.2:3b");
+  return { provider, text: data.response, usage: null };
+}
+
+async function generateGeminiReply(system: string, prompt: string) {
     const key = process.env.GEMINI_API_KEY;
     if (!key) throw new Error("Gemini is not configured.");
     const model = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, { method: "POST", signal: AbortSignal.timeout(20_000), headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json", maxOutputTokens: 700 } }) });
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, { method: "POST", signal: AbortSignal.timeout(20_000), headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json", maxOutputTokens: 180 } }) });
     const data = await response.json().catch(() => null) as { candidates?: { content?: { parts?: { text?: string }[] } }[]; error?: { message?: string } } | null;
     const text = data?.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("").trim();
     if (!response.ok || !text) throw new Error(data?.error?.message ?? "Gemini could not generate a reply.");
-    return { provider, text };
-  }
-  const response = await fetch(localOllamaUrl(), { method: "POST", signal: AbortSignal.timeout(60_000), headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: process.env.OLLAMA_MODEL ?? "llama3.2:3b", prompt: `${system}\n\n${prompt}`, stream: false, format: "json", options: { num_predict: 700, temperature: 0.2 } }) });
-  const data = await response.json().catch(() => null) as { response?: string; error?: string } | null;
-  if (!response.ok || !data?.response) throw new Error(data?.error ?? "Ollama could not generate a reply. Run: ollama pull llama3.2:3b");
-  return { provider, text: data.response };
+    return { provider: "gemini" as const, text, usage: null };
 }
