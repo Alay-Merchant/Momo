@@ -3,6 +3,8 @@
 
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
+  terms_version text,
+  terms_accepted_at timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -39,7 +41,12 @@ language plpgsql
 security definer set search_path = ''
 as $$
 begin
-  insert into public.profiles (id) values (new.id);
+  insert into public.profiles (id, terms_version, terms_accepted_at)
+  values (
+    new.id,
+    nullif(new.raw_user_meta_data ->> 'terms_version', ''),
+    case when coalesce((new.raw_user_meta_data ->> 'terms_accepted')::boolean, false) then now() else null end
+  );
   return new;
 end;
 $$;

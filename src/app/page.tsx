@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import AccountPanel, { type AccountUser } from "@/app/account-panel";
 import { CommunityInsights, OutcomePanel } from "@/app/community-panels";
+import SocialProofTicker from "@/app/social-proof-ticker";
 import type { Assessment, CaseFact, FlightCase } from "@/lib/case-types";
 import { flightFixtures } from "@/lib/fixtures";
 import { calculateUkCompensation, evaluateFlightCase, flightRuleCards } from "@/lib/flight-rules";
@@ -97,10 +98,10 @@ export default function Home() {
   return <main>
     <header className="topbar"><button className="brand" onClick={() => setScreen("start")}><Panda /><span>Momo</span></button><span className="tagline">Your calm next step</span><Link className="text-button" href="/help">What can I help with?</Link><AccountPanel onUserChange={setAccount}/></header>
 
-    {screen === "start" && <section className="landing">
+    {screen === "start" && <><SocialProofTicker /><section className="landing">
       <div className="hero-copy"><div className="momo-welcome"><Panda /><span className="speech">Hello, I&apos;m Momo. What happened?</span></div><Pill kind="green">Private by design · no account needed</Pill><h1>A calm guide when your flight does not go to plan.</h1><p>Start with what you know. Momo turns your story and airline messages into a clear next step, at your pace.</p><div className="hero-actions"><button className="primary" onClick={() => setScreen("facts")}>Tell Momo what happened <span>→</span></button><button className="secondary" onClick={() => chooseCase(flightFixtures[0])}>Show me an example</button></div><p className="small">Momo gives general information and drafting support. It is not a law firm and does not promise an outcome.</p></div>
       <div className="hero-card welcome-scene"><div className="paper-plane">✈</div><div className="bamboo bamboo-one">🎋</div><div className="bamboo bamboo-two">🎋</div><div className="scene-path"><span>1</span><i></i><span>2</span><i></i><span>3</span></div><h2>One small step at a time.</h2><p>Tell Momo what happened. Add the airline&apos;s reply. Then see what to do next.</p><div className="mini-row"><span>✓</span><div><b>You stay in control</b><small>Momo never sends anything for you.</small></div></div></div>
-    </section>}
+    </section></>}
 
     {screen !== "start" && <><div className="progress" aria-label="Case progress"><span className={screen === "facts" ? "active" : "done"}>1. Check facts</span><span className={screen === "result" ? "active" : ["reply", "draft"].includes(screen) ? "done" : ""}>2. What Momo found</span><span className={screen === "reply" ? "active" : screen === "draft" ? "done" : ""}>3. Explain reply</span><span className={screen === "draft" ? "active" : ""}>4. Your message</span></div>
     <section className="workspace">

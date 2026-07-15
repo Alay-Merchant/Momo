@@ -16,11 +16,14 @@ export async function POST(request: NextRequest) {
   const acceptedAmount = money(body?.acceptedAmount);
   if ((body?.requestedAmount !== "" && requestedAmount === null) || (body?.offeredAmount !== "" && offeredAmount === null) || (body?.acceptedAmount !== "" && acceptedAmount === null)) return NextResponse.json({ error: "Amounts must be between 0 and 50,000." }, { status: 400 });
   const currency = typeof body?.currency === "string" && /^[A-Z]{3}$/.test(body.currency) ? body.currency : "GBP";
+  const city = typeof body?.city === "string" ? body.city.trim().replace(/\s+/g, " ") : "";
+  const socialProofOptIn = body?.shareInTicker === true;
+  if (socialProofOptIn && (!/^[\p{L} .'-]{2,60}$/u.test(city) || acceptedAmount === null || acceptedAmount <= 0)) return NextResponse.json({ error: "A public Momo win needs a city and a positive accepted amount." }, { status: 400 });
   const response = NextResponse.json({ ok: true, message: "Thank you. Only the anonymous outcome details were added to Momo's learning pool." });
   const supabase = createSupabaseRouteClient(request, response);
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Please sign in before sharing an anonymous outcome." }, { status: 401 });
-  const { error } = await supabase.from("outcome_contributions").insert({ user_id: user.id, airline, disruption_type: body.disruptionType, delay_band: delayBand(body.delayMinutes), reason_category: body.reasonCategory, resolution_type: body.resolutionType, requested_amount: requestedAmount, offered_amount: offeredAmount, accepted_amount: acceptedAmount, currency, opted_in: true });
+  const { error } = await supabase.from("outcome_contributions").insert({ user_id: user.id, airline, disruption_type: body.disruptionType, delay_band: delayBand(body.delayMinutes), reason_category: body.reasonCategory, resolution_type: body.resolutionType, requested_amount: requestedAmount, offered_amount: offeredAmount, accepted_amount: acceptedAmount, currency, opted_in: true, social_proof_opt_in: socialProofOptIn, city: socialProofOptIn ? city : null });
   if (error) return NextResponse.json({ error: "Momo could not save that outcome yet." }, { status: 500 });
   return response;
 }

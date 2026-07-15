@@ -1,0 +1,10 @@
+export type SocialProof = { city: string; compensation: number; disruption_type: "delay" | "cancellation" | "missed_connection" | "denied_boarding"; demo?: boolean };
+
+export const demoSocialProof: SocialProof[] = [
+  { city: "London", compensation: 300, disruption_type: "cancellation", demo: true }, { city: "Manchester", compensation: 220, disruption_type: "delay", demo: true }, { city: "Bristol", compensation: 350, disruption_type: "missed_connection", demo: true }, { city: "Leeds", compensation: 260, disruption_type: "denied_boarding", demo: true }, { city: "Glasgow", compensation: 520, disruption_type: "cancellation", demo: true },
+  { city: "Cardiff", compensation: 220, disruption_type: "delay", demo: true }, { city: "Liverpool", compensation: 350, disruption_type: "missed_connection", demo: true }, { city: "Edinburgh", compensation: 260, disruption_type: "denied_boarding", demo: true }, { city: "Belfast", compensation: 520, disruption_type: "cancellation", demo: true }, { city: "Birmingham", compensation: 220, disruption_type: "delay", demo: true },
+  { city: "Newcastle", compensation: 350, disruption_type: "missed_connection", demo: true }, { city: "Nottingham", compensation: 260, disruption_type: "denied_boarding", demo: true }, { city: "Brighton", compensation: 520, disruption_type: "cancellation", demo: true }, { city: "Oxford", compensation: 220, disruption_type: "delay", demo: true }, { city: "York", compensation: 350, disruption_type: "missed_connection", demo: true },
+  { city: "Cambridge", compensation: 260, disruption_type: "denied_boarding", demo: true }, { city: "Bath", compensation: 520, disruption_type: "cancellation", demo: true }, { city: "Reading", compensation: 220, disruption_type: "delay", demo: true }, { city: "Sheffield", compensation: 350, disruption_type: "missed_connection", demo: true }, { city: "Leicester", compensation: 260, disruption_type: "denied_boarding", demo: true },
+];
+
+export function humanDisruption(disruption: SocialProof["disruption_type"]) { return disruption.replaceAll("_", " "); }

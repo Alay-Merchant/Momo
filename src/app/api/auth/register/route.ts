@@ -9,9 +9,10 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const email = cleanEmail(body?.email);
   if (!email || !validPassword(body?.password)) return NextResponse.json({ error: "Use a valid email and a password of at least 12 characters." }, { status: 400 });
+  if (body?.termsAccepted !== true) return NextResponse.json({ error: "Please read and accept Momo's Terms to create an account." }, { status: 400 });
   const response = NextResponse.json({ ok: true }, { status: 201 });
   const supabase = createSupabaseRouteClient(request, response);
-  const { data, error } = await supabase.auth.signUp({ email, password: body.password, options: { emailRedirectTo: new URL("/", request.url).origin } });
+  const { data, error } = await supabase.auth.signUp({ email, password: body.password, options: { emailRedirectTo: new URL("/", request.url).origin, data: { terms_accepted: true, terms_version: "2026-07-15" } } });
   if (error) {
     const isEmailRateLimit = /rate limit|too many requests/i.test(error.message);
     return NextResponse.json({ error: isEmailRateLimit ? "Supabase has temporarily paused confirmation emails. For local testing, turn off Confirm email in Supabase Authentication → Providers → Email, then try again." : error.message }, { status: isEmailRateLimit ? 429 : 400 });
