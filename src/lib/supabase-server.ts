@@ -1,5 +1,6 @@
 import "server-only";
 import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 import type { NextRequest, NextResponse } from "next/server";
 
 export function createSupabaseRouteClient(request: NextRequest, response: NextResponse) {
@@ -12,6 +13,13 @@ export function createSupabaseRouteClient(request: NextRequest, response: NextRe
       setAll: (cookies) => cookies.forEach(({ name, value, options }) => response.cookies.set(name, value, options)),
     },
   });
+}
+
+export function createSupabaseAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
 }
 
 export type SavedCase = { id: string; title: string; status: string; savedAt: string };
