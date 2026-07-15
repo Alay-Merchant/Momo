@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { NextRequest, NextResponse } from "next/server";
 import { cleanAirline, delayBand, needsResearch, reasonCategories, disruptionTypes, validChoice } from "@/lib/community-insights";
 import { rateLimit } from "@/lib/auth-store";
+import { clientIp, jsonBody, sameOrigin } from "@/lib/request-security";
 import { createSupabaseAdminClient, createSupabaseRouteClient } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
@@ -13,7 +14,8 @@ function topicKey(airline: string, disruptionType: string, band: string, reason:
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.json().catch(() => null);
+  if (!sameOrigin(request)) return NextResponse.json({ error: "This request was blocked for safety." }, { status: 403 });
+  const parsed = await jsonBody(request, 3_000); if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 }); const body = parsed.body as { airline?: unknown; disruptionType?: unknown; reasonCategory?: unknown; delayMinutes?: unknown; requestResearch?: unknown };
   const airline = cleanAirline(body?.airline);
   if (!airline || !validChoice(body?.disruptionType, disruptionTypes) || !validChoice(body?.reasonCategory, reasonCategories)) return NextResponse.json({ error: "Please provide a valid airline and issue type." }, { status: 400 });
   const band = delayBand(body?.delayMinutes);
@@ -29,8 +31,7 @@ export async function POST(request: NextRequest) {
   if (cached) return NextResponse.json({ kind: "official", research: cached, message: "Momo found a recent official-source note for this situation." }, { headers: response.headers });
   if (!body?.requestResearch || !needsResearch(0, false)) return NextResponse.json({ kind: "none", message: "Momo does not yet have enough similar anonymous outcomes. You can ask it to check current official guidance." }, { headers: response.headers });
 
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0] ?? "local";
-  if (!rateLimit(`insights:${ip}`)) return NextResponse.json({ error: "Please wait before asking Momo to research again." }, { status: 429 });
+  if (!rateLimit(`insights:${clientIp(request)}`)) return NextResponse.json({ error: "Please wait before asking Momo to research again." }, { status: 429 });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Sign in to request a live official-source check." }, { status: 401 });
   const admin = createSupabaseAdminClient();

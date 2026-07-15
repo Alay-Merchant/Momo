@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cleanEmail, rateLimit } from "@/lib/auth-store";
 import { createSupabaseRouteClient } from "@/lib/supabase-server";
+import { clientIp, jsonBody, sameOrigin } from "@/lib/request-security";
 
 export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0] ?? "local";
-  if (!rateLimit(`reset:${ip}`)) return NextResponse.json({ error: "Please wait before asking for another reset email." }, { status: 429 });
-  const body = await request.json().catch(() => null);
+  if (!sameOrigin(request)) return NextResponse.json({ error: "This request was blocked for safety." }, { status: 403 });
+  if (!rateLimit(`reset:${clientIp(request)}`)) return NextResponse.json({ error: "Please wait before asking for another reset email." }, { status: 429 });
+  const parsed = await jsonBody(request, 1_000); if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 }); const body = parsed.body as { email?: unknown };
   const email = cleanEmail(body?.email);
   if (!email) return NextResponse.json({ error: "Please enter a valid email address." }, { status: 400 });
   const response = NextResponse.json({ message: "If that email has a Momo account, we have sent a reset link." });
