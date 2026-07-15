@@ -1,129 +1,111 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import AccountPanel, { type AccountUser } from "@/app/account-panel";
 import { CommunityInsights, OutcomePanel } from "@/app/community-panels";
-import SocialProofTicker from "@/app/social-proof-ticker";
 import FlightLookup from "@/app/flight-lookup";
-import type { Assessment, CaseFact, FlightCase } from "@/lib/case-types";
-import { flightFixtures } from "@/lib/fixtures";
+import SocialProofTicker from "@/app/social-proof-ticker";
+import type { CaseFact, FlightCase } from "@/lib/case-types";
+import { createBlankFlightCase, flightFixtures } from "@/lib/fixtures";
 import { calculateUkCompensation, evaluateFlightCase, flightRuleCards } from "@/lib/flight-rules";
 
 type Screen = "start" | "facts" | "result" | "reply" | "draft";
-type ReplyEvent = { id: string; author: "airline" | "momo"; text: string; attachment?: string; addedAt: string };
+type ReplyEvent = { id: string; author: "airline" | "momo"; text: string; draft?: string; addedAt: string };
 
-const stateCopy = {
-  READY_TO_SEND: "Your information supports sending this claim.",
-  LIKELY_WORTH_PURSUING: "This may be worth pursuing.",
-  NEEDS_DETAIL: "Momo needs one more detail first.",
-  DIFFERENT_ROUTE: "Compensation is uncertain, but you may still be able to ask for help.",
-};
+const stateCopy = { READY_TO_SEND: "Your information supports sending this claim.", LIKELY_WORTH_PURSUING: "This may be worth pursuing.", NEEDS_DETAIL: "Momo needs one more detail first.", DIFFERENT_ROUTE: "Compensation is uncertain, but you may still be able to ask for help." };
 
-function Panda() {
-  return <span aria-label="Momo the panda" role="img" className="panda">🐼</span>;
-}
+function Panda() { return <span aria-label="Momo the panda" role="img" className="panda">🐼</span>; }
+function Pill({ children, kind = "blue" }: { children: React.ReactNode; kind?: "blue" | "green" | "amber" }) { return <span className={`pill ${kind}`}>{children}</span>; }
+function lookupDate(value: string | number | null | undefined) { return typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : ""; }
 
-function Pill({ children, kind = "blue" }: { children: React.ReactNode; kind?: "blue" | "green" | "amber" }) {
-  return <span className={`pill ${kind}`}>{children}</span>;
-}
-
-function recommendedText(assessment: Assessment, caseData: FlightCase) {
-  const unknown = assessment.materialUnknowns[0];
-  if (assessment.caseState === "DIFFERENT_ROUTE") return "Ask the airline to consider any reasonable expenses you had because of the delay. Keep your receipts.";
-  if (assessment.caseState === "NEEDS_DETAIL") return `Find out ${unknown}. Momo will then be able to suggest a fair next move.`;
-  if (caseData.disruptionType === "cancellation") return "Ask the airline to review your cancelled-flight case and explain the basis for its decision.";
-  if (caseData.disruptionType === "denied_boarding") return "Ask the airline to explain why you could not board and review your case using your confirmed journey details.";
-  return "Ask the airline to review your case again and explain the specific event behind its broad reason.";
-}
-
-function lookupDate(value: string | number | null | undefined) {
-  if (typeof value !== "string") return "";
-  const date = Date.parse(value);
-  return Number.isFinite(date) ? new Date(date).toISOString().slice(0, 10) : "";
+function requiredFact(facts: CaseFact[], field: string) {
+  const value = facts.find((fact) => fact.field === field)?.value;
+  return value !== null && value !== "" && value !== 0;
 }
 
 export default function Home() {
   const [screen, setScreen] = useState<Screen>("start");
-  const [caseData, setCaseData] = useState<FlightCase>(flightFixtures[0]);
-  const [facts, setFacts] = useState<CaseFact[]>(flightFixtures[0].facts);
-  const [reply, setReply] = useState(flightFixtures[0].airlineReply);
+  const [caseData, setCaseData] = useState<FlightCase>(createBlankFlightCase);
+  const [facts, setFacts] = useState<CaseFact[]>(() => createBlankFlightCase().facts);
+  const [reply, setReply] = useState("");
   const [replyHistory, setReplyHistory] = useState<ReplyEvent[]>([]);
-  const [copied, setCopied] = useState(false);
-  const [uploadNote, setUploadNote] = useState("");
+  const [generatedDraft, setGeneratedDraft] = useState("");
+  const [replyStatus, setReplyStatus] = useState("");
+  const [journeyMessage, setJourneyMessage] = useState("");
   const [account, setAccount] = useState<AccountUser | null>(null);
   const [saveMessage, setSaveMessage] = useState("");
-  const editedLetter = useRef("");
+  const [copied, setCopied] = useState(false);
+
   const assessment = useMemo(() => evaluateFlightCase({ ...caseData, facts }), [caseData, facts]);
   const compensation = useMemo(() => calculateUkCompensation({ ...caseData, facts }), [caseData, facts]);
-  const latestReply = replyHistory.filter((event) => event.author === "airline").at(-1)?.text ?? reply;
-  const offeredAmount = Number(latestReply.match(/£\s?(\d{2,4})/)?.[1] ?? 0);
-  const negotiationGuidance = compensation.amountGbp === null
-    ? compensation.reason
-    : offeredAmount > 0 && offeredAmount < compensation.amountGbp
-      ? `The airline appears to offer £${offeredAmount}. Based on the confirmed facts, ask it to explain the difference and review the fixed £${compensation.amountGbp} per-person amount.`
-      : `Based on the confirmed facts, the evidence-backed amount to ask the airline to review is £${compensation.amountGbp} per person, plus separately evidenced reasonable expenses.`;
+  const factsReady = ["flight_number", "route", "flight_date", "final_arrival_delay_minutes"].every((field) => requiredFact(facts, field));
+  const latestAirlineReply = replyHistory.filter((event) => event.author === "airline").at(-1)?.text ?? "";
   const confirmedCount = facts.filter((fact) => fact.confirmed).length;
-  const draft = `Subject: Request to review ${facts.find((fact) => fact.field === "flight_number")?.value ?? "my flight"} case\n\nDear Customer Relations Team,\n\nI am writing to ask you to review my case again. My journey was ${facts.find((fact) => fact.field === "route")?.value ?? "disrupted"} on ${facts.find((fact) => fact.field === "flight_date")?.value ?? "the date of travel"}.\n\nYour reply refers to “${facts.find((fact) => fact.field === "airline_reason")?.value ?? "the disruption"}”. Please identify the specific event behind this reason and explain how it affected my flight.${compensation.amountGbp ? ` Based on the confirmed distance and arrival delay, I ask you to review compensation of £${compensation.amountGbp} per person, as well as any separately evidenced reasonable expenses.` : ""} I ask that you reconsider my case using the information attached.\n\nThank you for your time.\n\nKind regards`;
+  const assessmentSummary = `${stateCopy[assessment.caseState]} UK261 rules considered: ${assessment.ruleIds.join(", ")}. Important unknowns: ${assessment.materialUnknowns.join(", ") || "none"}.`;
 
-  const chooseCase = (next: FlightCase) => {
-    setCaseData(next);
-    setFacts(next.facts);
-    setReply(next.airlineReply);
-    setReplyHistory([]);
-    setScreen("facts");
-    setCopied(false);
+  const startOwnCase = () => {
+    const blank = createBlankFlightCase();
+    setCaseData(blank); setFacts(blank.facts); setReply(""); setReplyHistory([]); setGeneratedDraft(""); setJourneyMessage(""); setScreen("facts");
   };
-  const updateFact = (id: string, value: string) => setFacts((current) => current.map((fact) => fact.id === id ? { ...fact, value: fact.field === "final_arrival_delay_minutes" ? Number(value) || null : value } : fact));
-  const updateDelay = (hours: string, minutes: string) => { const total = Math.max(0, Math.min(10_080, (Number(hours) || 0) * 60 + (Number(minutes) || 0))); setFacts((current) => current.map((fact) => fact.field === "final_arrival_delay_minutes" ? { ...fact, value: total, confirmed: false } : fact)); };
+  const chooseSample = () => {
+    const sample = flightFixtures[0];
+    setCaseData(sample); setFacts(sample.facts); setReply(sample.airlineReply); setReplyHistory([]); setGeneratedDraft(""); setJourneyMessage(""); setScreen("facts");
+  };
+  const goTo = (next: Screen) => {
+    if ((next === "result" || next === "reply") && !factsReady) return setJourneyMessage("Before continuing, add your flight number, journey, travel date, and arrival delay. You can add the rest later.");
+    if (next === "draft" && !generatedDraft) return setJourneyMessage("Add the airline's reply and ask Momo to prepare a message first.");
+    setJourneyMessage(""); setScreen(next);
+  };
+  const updateFact = (id: string, value: string) => setFacts((current) => current.map((fact) => fact.id === id ? { ...fact, value: fact.field === "final_arrival_delay_minutes" ? Number(value) || null : value, confirmed: false, sourceLabel: "You told Momo" } : fact));
+  const updateDelay = (hours: string, minutes: string) => {
+    const total = Math.max(0, Math.min(10_080, (Number(hours) || 0) * 60 + (Number(minutes) || 0)));
+    setFacts((current) => current.map((fact) => fact.field === "final_arrival_delay_minutes" ? { ...fact, value: total || null, confirmed: false, sourceLabel: "You told Momo" } : fact));
+  };
   const updateDistance = (value: string) => setFacts((current) => {
     const distance = Number(value) || null;
     const existing = current.find((fact) => fact.field === "flight_distance_km");
-    return existing ? current.map((fact) => fact.field === "flight_distance_km" ? { ...fact, value: distance, confirmed: distance !== null } : fact) : [...current, { id: "distance", field: "flight_distance_km", label: "Flight distance", value: distance, provenance: "USER_STATED_UNCONFIRMED", sourceLabel: "You told Momo", confirmed: distance !== null }];
+    return existing ? current.map((fact) => fact.field === "flight_distance_km" ? { ...fact, value: distance, confirmed: Boolean(distance), sourceLabel: "You told Momo" } : fact) : [...current, { id: "distance", field: "flight_distance_km", label: "Flight distance", value: distance, provenance: "USER_STATED_UNCONFIRMED", sourceLabel: "You told Momo", confirmed: Boolean(distance) }];
   });
   const confirmFacts = () => setFacts((current) => current.map((fact) => ({ ...fact, confirmed: fact.value !== null && fact.value !== "" })));
-  const copyDraft = async () => { await navigator.clipboard?.writeText(editedLetter.current || draft); setCopied(true); };
-  const fileSelected = (file?: File) => {
-    if (!file) return;
-    if (file.size > 10 * 1024 * 1024) return setUploadNote("That file is over 10 MB. Please choose a smaller file.");
-    if (!/^(application\/pdf|image\/(png|jpeg))$/.test(file.type)) return setUploadNote("Please choose a PDF, PNG, or JPG file.");
-    setUploadNote(`${file.name} is ready. In the secure demo, Momo keeps it in this browser only.`);
-  };
-  const addReply = (attachment?: File) => {
+  const addReply = () => {
     const text = reply.trim();
-    if (!text && !attachment) return;
-    setReplyHistory((history) => [...history, { id: crypto.randomUUID(), author: "airline", text: text || "Reply added as an attachment.", attachment: attachment?.name, addedAt: new Date().toLocaleString("en-GB") }]);
-    setReply("");
+    if (!text) return setReplyStatus("Paste the airline's message first.");
+    setReplyHistory((history) => [...history, { id: crypto.randomUUID(), author: "airline", text, addedAt: new Date().toLocaleString("en-GB") }]);
+    setReply(""); setReplyStatus("Airline reply added to your private case story.");
+    return text;
   };
-  const generateReply = () => {
-    if (!latestReply.trim()) return;
-    setReplyHistory((history) => [...history, { id: crypto.randomUUID(), author: "momo", text: draft, addedAt: new Date().toLocaleString("en-GB") }]);
+  const generateReply = async () => {
+    const text = reply.trim() || latestAirlineReply;
+    if (!text) return setReplyStatus("Paste an airline reply before asking Momo for help.");
+    if (reply.trim()) addReply();
+    setReplyStatus("Momo is reading the reply and checking the confirmed facts…");
+    try {
+      const response = await fetch("/api/momo/explain", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reply: text, assessment: assessmentSummary, facts: facts.filter((fact) => fact.confirmed).map(({ label, value }) => ({ label, value })), compensation }) });
+      const data = await response.json();
+      if (!response.ok) return setReplyStatus(data.error ?? "Momo could not prepare a reply right now.");
+      const draft = data.draft || data.explanation;
+      setGeneratedDraft(draft);
+      setReplyHistory((history) => [...history, { id: crypto.randomUUID(), author: "momo", text: data.explanation, draft, addedAt: new Date().toLocaleString("en-GB") }]);
+      setReplyStatus("Momo prepared a draft using your confirmed facts. Please read and edit it before sending.");
+    } catch { setReplyStatus("Momo could not connect right now. Your airline reply is still kept in this browser."); }
   };
   const saveClaim = async () => {
-    const response = await fetch("/api/claims", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: caseData.title, status: stateCopy[assessment.caseState] }) });
+    const response = await fetch("/api/claims", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: caseData.title, status: stateCopy[assessment.caseState], caseData: { disruptionType: caseData.disruptionType, facts, replyHistory, generatedDraft } }) });
     const data = await response.json();
-    if (!response.ok) return setSaveMessage("Create an account or sign in to save this claim.");
-    setAccount((current) => current ? { ...current, claims: [data.claim, ...current.claims.filter((claim) => claim.id !== data.claim.id)] } : current);
-    setSaveMessage("Claim saved. You can return to it from your account menu.");
+    if (!response.ok) return setSaveMessage("Create an account or sign in to save your whole claim story.");
+    setAccount(data.user); setSaveMessage("Your claim and conversation were saved. You can return to them from your account menu.");
   };
+  const copyDraft = async () => { await navigator.clipboard?.writeText(generatedDraft); setCopied(true); };
 
   return <main className="momo-app">
     <header className="topbar"><button className="brand" onClick={() => setScreen("start")}><Panda /><span>Momo</span></button><span className="tagline">Your calm next step</span><Link className="nav-button" href="/help">What can I help with?</Link><AccountPanel onUserChange={setAccount}/></header>
-
-    {screen === "start" && <><SocialProofTicker /><section className="landing">
-      <div className="hero-copy"><div className="momo-welcome"><Panda /><span className="speech">Hello, I&apos;m Momo. What happened?</span></div><Pill kind="green">Private by design · no account needed</Pill><h1>A calm guide when your flight does not go to plan.</h1><p>Start with what you know. Momo turns your story and airline messages into a clear next step, at your pace.</p><div className="hero-actions"><button className="primary" onClick={() => setScreen("facts")}>Tell Momo what happened <span>→</span></button><button className="secondary" onClick={() => chooseCase(flightFixtures[0])}>Show me an example</button></div><p className="small">Momo gives general information and drafting support. It is not a law firm and does not promise an outcome.</p></div>
-      <div className="hero-card welcome-scene"><div className="paper-plane">✈</div><div className="bamboo bamboo-one">🎋</div><div className="bamboo bamboo-two">🎋</div><div className="scene-path"><span>1</span><i></i><span>2</span><i></i><span>3</span></div><h2>One small step at a time.</h2><p>Tell Momo what happened. Add the airline&apos;s reply. Then see what to do next.</p><div className="mini-row"><span>✓</span><div><b>You stay in control</b><small>Momo never sends anything for you.</small></div></div></div>
-    </section></>}
-
-    {screen !== "start" && <><nav className="progress" aria-label="Case progress"><button type="button" onClick={() => setScreen("facts")} className={screen === "facts" ? "active" : "done"}>1. Check facts</button><button type="button" onClick={() => setScreen("result")} className={screen === "result" ? "active" : ["reply", "draft"].includes(screen) ? "done" : ""}>2. What Momo found</button><button type="button" onClick={() => setScreen("reply")} className={screen === "reply" ? "active" : screen === "draft" ? "done" : ""}>3. Explain reply</button><button type="button" onClick={() => setScreen("draft")} className={screen === "draft" ? "active" : ""}>4. Your message</button></nav>
-    <section className="workspace">
-      {screen === "facts" && <><div className="section-heading"><Panda /><div><h1>Please check what Momo found</h1><p>You can change anything. Momo only uses facts you confirm.</p></div></div><div className="upload"><label htmlFor="evidence">Add a booking, screenshot, or airline email <span>PDF, PNG or JPG · up to 10 MB</span></label><input id="evidence" type="file" accept="application/pdf,image/png,image/jpeg" onChange={(event) => fileSelected(event.target.files?.[0])}/>{uploadNote && <p role="status">{uploadNote}</p>}</div><div className="facts">{facts.filter((fact) => fact.field !== "flight_distance_km").map((fact) => <div className="fact" key={fact.id}><div><label htmlFor={fact.id}>{fact.label}</label><small>{fact.sourceLabel}</small></div>{fact.field === "final_arrival_delay_minutes" ? <div className="delay-inputs"><label>Hours<input type="number" min="0" max="168" value={Math.floor(Number(fact.value ?? 0) / 60)} onChange={(event) => updateDelay(event.target.value, String(Number(fact.value ?? 0) % 60))}/></label><label>Minutes<input type="number" min="0" max="59" value={Number(fact.value ?? 0) % 60} onChange={(event) => updateDelay(String(Math.floor(Number(fact.value ?? 0) / 60)), event.target.value)}/></label></div> : <input id={fact.id} value={fact.value ?? ""} onChange={(event) => updateFact(fact.id, event.target.value)} aria-label={fact.label}/>}<Pill kind={fact.confirmed ? "green" : fact.sourceLabel.includes("needs") ? "amber" : "blue"}>{fact.confirmed ? "Confirmed" : fact.sourceLabel.includes("needs") ? "Needed" : "Found"}</Pill></div>)}<div className="fact"><div><label htmlFor="distance">Flight distance in kilometres</label><small>Used only to show a UK261 fixed compensation amount</small></div><input id="distance" type="number" min="1" value={facts.find((fact) => fact.field === "flight_distance_km")?.value ?? ""} onChange={(event) => updateDistance(event.target.value)} aria-label="Flight distance in kilometres"/><Pill kind={facts.some((fact) => fact.field === "flight_distance_km" && fact.value) ? "blue" : "amber"}>{facts.some((fact) => fact.field === "flight_distance_km" && fact.value) ? "Found" : "Optional"}</Pill></div></div><FlightLookup flightNumber={String(facts.find((fact) => fact.field === "flight_number")?.value ?? "")} flightDate={lookupDate(facts.find((fact) => fact.field === "flight_date")?.value)} onUseDelay={(minutes) => updateDelay(String(Math.floor(minutes / 60)), String(minutes % 60))}/><div className="actions"><button className="secondary" onClick={() => setScreen("start")}>Back</button><button className="primary" onClick={() => { confirmFacts(); setScreen("result"); }}>These facts look right <span>→</span></button></div></>}
-
-      {screen === "result" && <><div className="section-heading"><Panda /><div><h1>Here is what Momo found</h1><p>Based on the facts you checked. Momo will be clear about anything it does not know.</p></div></div><div className="assessment-grid"><article className="result-card feature"><Pill kind={assessment.caseState === "DIFFERENT_ROUTE" ? "amber" : "green"}>{stateCopy[assessment.caseState]}</Pill><h2>{recommendedText(assessment, caseData)}</h2><p>Recommendation quality: <b>9.4/10</b> · clear, evidence-led, and cautious.</p></article><article className="result-card"><h3>Why Momo thinks that</h3><p>{flightRuleCards.find((card) => card.id === assessment.ruleIds[1])?.plainLanguage ?? flightRuleCards[0].plainLanguage}</p><a href={flightRuleCards[0].officialSource.url} target="_blank" rel="noreferrer">See official CAA information ↗</a></article><article className="result-card"><h3>What could change this</h3>{assessment.materialUnknowns.length ? <ul>{assessment.materialUnknowns.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No important detail is missing from this demo case.</p>}</article><article className="result-card"><h3>Momo checked your case</h3><p>✓ {facts.length} facts found<br/>✓ {confirmedCount} facts confirmed<br/>✓ {assessment.ruleIds.length} official rules used<br/>✓ Every suggestion is cautious</p></article></div><section className="compensation-card"><h2>{compensation.amountGbp ? `Possible fixed compensation: £${compensation.amountGbp} per person` : "Momo cannot safely state a fixed amount yet"}</h2><p>{compensation.reason}</p><a href={compensation.sourceUrl} target="_blank" rel="noreferrer">Check the official CAA guidance ↗</a></section><CommunityInsights disruptionType={caseData.disruptionType} delayMinutes={Number(facts.find((fact) => fact.field === "final_arrival_delay_minutes")?.value ?? 0) || null}/><div className="save-claim"><div><b>{account ? "Keep this claim in your account" : "Want to come back to this later?"}</b><p>{account ? "Save this assessment and its next step to your claim timeline." : "Your estimate is free. Create an account only when you want to save it."}</p></div><button className="secondary" onClick={saveClaim}>{account ? "Save this claim" : "Save with an account"}</button></div>{saveMessage && <p className="save-message" role="status">{saveMessage}</p>}<div className="actions"><button className="secondary" onClick={() => setScreen("facts")}>Edit facts</button><button className="primary" onClick={() => setScreen("reply")}>Explain the airline reply <span>→</span></button></div></>}
-
-      {screen === "reply" && <><div className="section-heading"><Panda /><div><h1>Talk through the airline&apos;s replies</h1><p>Add each reply, then let Momo prepare a calm, evidence-led response. Keep going until the case is resolved.</p></div></div><section className="case-chat" aria-label="Your claim conversation"><div className="chat-intro"><Panda /><div><b>Momo</b><p>I&apos;ll keep the whole story in one place. Paste the airline&apos;s latest message below.</p></div></div>{replyHistory.length > 0 && <div className="chat-thread">{replyHistory.map((event) => <article className={`chat-bubble ${event.author}`} key={event.id}><b>{event.author === "momo" ? "Momo" : "Airline reply"}</b><small>{event.addedAt}{event.attachment ? ` · ${event.attachment}` : ""}</small><p>{event.text}</p></article>)}</div>}<div className="chat-composer"><label htmlFor="reply">What did the airline say?</label><textarea id="reply" value={reply} onChange={(event) => setReply(event.target.value)} maxLength={5000} placeholder="Paste the latest airline message here…"/><label className="reply-upload" htmlFor="reply-file">Attach a PDF, PNG, or JPG<input id="reply-file" type="file" accept="application/pdf,image/png,image/jpeg" onChange={(event) => addReply(event.target.files?.[0])}/></label><div className="reply-actions"><button className="secondary" onClick={() => addReply()}>Add airline reply</button><button className="primary" onClick={() => { addReply(); window.setTimeout(generateReply, 0); }}>Generate Momo&apos;s reply <span>→</span></button></div><small>Up to 5,000 characters. Attachments stay in this browser during the demo.</small></div></section><div className="reply-grid"><article><h3>Momo explains the latest reply</h3><p>{/operational|no specific/i.test(latestReply) ? "This is a broad reason. It does not identify the event or explain how it affected your flight." : "The reply gives some information, but Momo still checks it against your confirmed journey details and earlier replies."}</p></article><article><h3>Evidence-backed next move</h3><p>{negotiationGuidance}</p>{compensation.amountGbp && <a href={compensation.sourceUrl} target="_blank" rel="noreferrer">Why this amount? Official CAA guidance ↗</a>}</article></div><section className="quality"><h2>Reply quality check</h2><div><span>Did they name the event?</span><b>{/operational|no specific/i.test(latestReply) ? "No" : "Partly"}</b></div><div><span>Did they explain how it affected the flight?</span><b>{/operational|no specific/i.test(latestReply) ? "No" : "Not fully"}</b></div><div><span>Did they attach evidence?</span><b>{replyHistory.some((event) => event.attachment) ? "You added it for review" : "Not yet"}</b></div></section><div className="actions"><button className="secondary" onClick={() => setScreen("result")}>Back</button><button className="primary" onClick={() => { editedLetter.current = draft; setScreen("draft"); }}>Open latest message <span>→</span></button></div></>}
-
-      {screen === "draft" && <><div className="section-heading"><Panda /><div><h1>Momo has prepared your next message</h1><p>You are always in control. Read, edit, then send it yourself through the airline&apos;s official channel.</p></div></div><div className="trust"><span>✓</span><div><b>Trust receipt</b><p>{facts.length} facts checked · {assessment.ruleIds.length} official rule cards used · no guaranteed outcome claimed</p></div></div><label className="letter-label" htmlFor="letter">Your editable message</label><textarea id="letter" className="letter" defaultValue={draft} onChange={(event) => { editedLetter.current = event.target.value; }} maxLength={5000}/><div className="proof"><h3>Why Momo wrote this</h3><p>Your confirmed journey details identify the flight. The message asks only for a review and clear explanation. It does not claim a guaranteed result.</p></div><OutcomePanel disruptionType={caseData.disruptionType} delayMinutes={Number(facts.find((fact) => fact.field === "final_arrival_delay_minutes")?.value ?? 0) || null}/><div className="actions"><button className="secondary" onClick={() => setScreen("reply")}>Edit case</button><button className="primary" onClick={copyDraft}>{copied ? "Copied to clipboard ✓" : "Copy my message"}</button></div><p className="send-note">Momo cannot send this for you. Paste it into the airline&apos;s official claim or complaint channel when you are ready.</p></>}
+    {screen === "start" && <><SocialProofTicker /><section className="landing"><div className="hero-copy"><div className="momo-welcome"><Panda /><span className="speech">Hello, I&apos;m Momo. What happened?</span></div><Pill kind="green">Private by design · no account needed</Pill><h1>Check your disrupted UK flight in about three minutes.</h1><p>Start with what you know. Momo turns your story and airline messages into a clear next step, at your pace.</p><div className="hero-actions"><button className="primary" onClick={startOwnCase}>Start my case <span>→</span></button><button className="secondary" onClick={chooseSample}>View a sample case</button></div><p className="small">UK261 guidance only. Momo gives general information and drafting support; it is not a law firm and does not promise an outcome.</p></div><div className="hero-card welcome-scene"><div className="paper-plane">✈</div><div className="scene-path"><span>1</span><i></i><span>2</span><i></i><span>3</span></div><h2>One small step at a time.</h2><p>Tell Momo what happened. Add the airline&apos;s reply. Then see what to do next.</p><div className="mini-row"><span>✓</span><div><b>You stay in control</b><small>Momo never sends anything for you.</small></div></div></div></section></>}
+    {screen !== "start" && <><nav className="progress" aria-label="Case progress"><button type="button" onClick={() => goTo("facts")} className={screen === "facts" ? "active" : "done"}>1. Check facts</button><button type="button" onClick={() => goTo("result")} className={screen === "result" ? "active" : ["reply", "draft"].includes(screen) ? "done" : ""}>2. What Momo found</button><button type="button" onClick={() => goTo("reply")} className={screen === "reply" ? "active" : screen === "draft" ? "done" : ""}>3. Airline reply</button><button type="button" onClick={() => goTo("draft")} className={screen === "draft" ? "active" : ""}>4. Your message</button></nav>{journeyMessage && <p className="journey-message" role="status">{journeyMessage}</p>}<section className="workspace">
+      {screen === "facts" && <><div className="section-heading"><Panda /><div><h1>Tell Momo the key details</h1><p>Start with what you know. You can add more later, and Momo only uses facts you confirm.</p></div></div><label className="disruption-picker">What happened?<select value={caseData.disruptionType} onChange={(event) => setCaseData((current) => ({ ...current, disruptionType: event.target.value as FlightCase["disruptionType"] }))}><option value="delay">My flight was delayed</option><option value="cancellation">My flight was cancelled</option><option value="denied_boarding">I was denied boarding</option><option value="missed_connection">I missed a connection</option></select></label><div className="facts">{facts.filter((fact) => fact.field !== "flight_distance_km").map((fact) => <div className="fact" key={fact.id}><div><label htmlFor={fact.id}>{fact.label}</label><small>{fact.field === "final_arrival_delay_minutes" ? "How late did you reach your final destination?" : fact.sourceLabel}</small></div>{fact.field === "final_arrival_delay_minutes" ? <div className="delay-inputs"><label>Hours<input type="number" min="0" max="168" value={Math.floor(Number(fact.value ?? 0) / 60)} onChange={(event) => updateDelay(event.target.value, String(Number(fact.value ?? 0) % 60))}/></label><label>Minutes<input type="number" min="0" max="59" value={Number(fact.value ?? 0) % 60} onChange={(event) => updateDelay(String(Math.floor(Number(fact.value ?? 0) / 60)), event.target.value)}/></label></div> : <input id={fact.id} value={fact.value ?? ""} onChange={(event) => updateFact(fact.id, event.target.value)} placeholder={fact.field === "airline_reason" ? "Optional — paste the reason when you have it" : ""}/>}<Pill kind={fact.confirmed ? "green" : requiredFact(facts, fact.field) ? "blue" : "amber"}>{fact.confirmed ? "Checked" : requiredFact(facts, fact.field) ? "Added" : "Add if you know"}</Pill></div>)}<div className="fact"><div><label htmlFor="distance">Flight distance in kilometres</label><small>Optional. It helps Momo show a possible fixed UK261 amount.</small></div><input id="distance" type="number" min="1" value={facts.find((fact) => fact.field === "flight_distance_km")?.value ?? ""} onChange={(event) => updateDistance(event.target.value)}/><Pill kind="amber">Optional</Pill></div></div><FlightLookup flightNumber={String(facts.find((fact) => fact.field === "flight_number")?.value ?? "")} flightDate={lookupDate(facts.find((fact) => fact.field === "flight_date")?.value)} onUseDelay={(minutes) => updateDelay(String(Math.floor(minutes / 60)), String(minutes % 60))}/><div className="actions"><button className="secondary" onClick={() => setScreen("start")}>Back</button><button className="primary" onClick={() => { if (!factsReady) return goTo("result"); confirmFacts(); goTo("result"); }}>These facts look right <span>→</span></button></div></>}
+      {screen === "result" && <><div className="section-heading"><Panda /><div><h1>Here is what Momo found</h1><p>Based on {confirmedCount} details you checked and current UK261 rule cards.</p></div></div><div className="assessment-grid"><article className="result-card feature"><Pill kind={assessment.caseState === "DIFFERENT_ROUTE" ? "amber" : "green"}>{stateCopy[assessment.caseState]}</Pill><h2>{assessment.caseState === "NEEDS_DETAIL" ? "Momo needs one more detail before it can suggest a fair next move." : "A calm, evidence-led next step is ready."}</h2><p>Momo will be clear about anything it does not know. It never promises compensation.</p></article><article className="result-card"><h3>Why this matters</h3><p>{flightRuleCards.find((card) => card.id === assessment.ruleIds[1])?.plainLanguage ?? flightRuleCards[0].plainLanguage}</p><a href={flightRuleCards[0].officialSource.url} target="_blank" rel="noreferrer">See official CAA information ↗</a></article><article className="result-card"><h3>What could change this</h3>{assessment.materialUnknowns.length ? <ul>{assessment.materialUnknowns.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No important detail is missing from your current information.</p>}</article></div><section className="compensation-card"><h2>{compensation.amountGbp ? `Possible fixed compensation: £${compensation.amountGbp} per person` : "Momo cannot safely state a fixed amount yet"}</h2><p>{compensation.reason}</p><a href={compensation.sourceUrl} target="_blank" rel="noreferrer">Check the official CAA guidance ↗</a></section><CommunityInsights disruptionType={caseData.disruptionType} delayMinutes={Number(facts.find((fact) => fact.field === "final_arrival_delay_minutes")?.value ?? 0) || null}/><div className="save-claim"><div><b>{account ? "Keep this claim in your account" : "Want to come back to this later?"}</b><p>Your estimate is free. Create an account only when you want to save your case story.</p></div><button className="secondary" onClick={saveClaim}>{account ? "Save my claim" : "Save with an account"}</button></div>{saveMessage && <p className="save-message" role="status">{saveMessage}</p>}<div className="actions"><button className="secondary" onClick={() => goTo("facts")}>Edit facts</button><button className="primary" onClick={() => goTo("reply")}>Add airline reply <span>→</span></button></div></>}
+      {screen === "reply" && <><div className="section-heading"><Panda /><div><h1>Talk through the airline&apos;s replies</h1><p>Paste each reply. Momo will explain it and prepare an editable, evidence-led next message.</p></div></div><section className="case-chat" aria-label="Your claim conversation"><div className="chat-intro"><Panda /><div><b>Momo</b><p>I&apos;ll keep the important details together. You stay in control of every message.</p></div></div>{replyHistory.length > 0 && <div className="chat-thread">{replyHistory.map((event) => <article className={`chat-bubble ${event.author}`} key={event.id}><b>{event.author === "momo" ? "Momo" : "Airline reply"}</b><small>{event.addedAt}</small><p>{event.text}</p>{event.author === "momo" && <button className="text-button" onClick={() => { setGeneratedDraft(event.draft ?? ""); goTo("draft"); }}>Open this draft</button>}</article>)}</div>}<div className="chat-composer"><label htmlFor="reply">What did the airline say?</label><textarea id="reply" value={reply} onChange={(event) => setReply(event.target.value)} maxLength={5000} placeholder="Paste the latest airline message here…"/><div className="reply-actions"><button className="secondary" onClick={addReply}>Add airline reply</button><button className="primary" onClick={generateReply}>Ask Momo for a reply <span>→</span></button></div><small>Momo uses your confirmed facts and the latest reply. Please check and edit its draft before sending.</small>{replyStatus && <p className="insight-message" role="status">{replyStatus}</p>}</div></section><div className="actions"><button className="secondary" onClick={() => goTo("result")}>Back</button><button className="primary" onClick={() => goTo("draft")}>Open latest message <span>→</span></button></div></>}
+      {screen === "draft" && <><div className="section-heading"><Panda /><div><h1>Your editable message</h1><p>Read it, edit it, and only send it yourself when it feels right.</p></div></div><div className="trust"><span>✓</span><div><b>Why you can trust this draft</b><p>It uses {confirmedCount} checked details and the UK261 rule cards above. It does not guarantee an outcome.</p></div></div><label className="letter-label" htmlFor="letter">Message to the airline</label><textarea id="letter" className="letter" value={generatedDraft} onChange={(event) => setGeneratedDraft(event.target.value)} maxLength={5000}/><div className="actions"><button className="secondary" onClick={() => goTo("reply")}>Edit case story</button><button className="primary" onClick={copyDraft}>{copied ? "Copied to clipboard ✓" : "Copy my message"}</button></div><p className="send-note">Momo cannot send this for you. Paste it into the airline&apos;s official claim or complaint channel when you are ready.</p><OutcomePanel disruptionType={caseData.disruptionType} delayMinutes={Number(facts.find((fact) => fact.field === "final_arrival_delay_minutes")?.value ?? 0) || null}/></>}
     </section></>}<footer className="site-footer"><span>© {new Date().getFullYear()} Momo · Calm support for flight disruption claims</span><Link href="/terms">Terms &amp; privacy summary</Link></footer>
   </main>;
 }

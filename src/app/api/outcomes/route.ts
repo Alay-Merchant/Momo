@@ -24,6 +24,9 @@ export async function POST(request: NextRequest) {
   const supabase = createSupabaseRouteClient(request, response);
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Please sign in before sharing an anonymous outcome." }, { status: 401 });
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { count } = await supabase.from("outcome_contributions").select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("created_at", since);
+  if ((count ?? 0) >= 3) return NextResponse.json({ error: "Momo limits anonymous outcome sharing to three entries in 30 days to protect the community data." }, { status: 429 });
   const { error } = await supabase.from("outcome_contributions").insert({ user_id: user.id, airline, disruption_type: body.disruptionType, delay_band: delayBand(body.delayMinutes), reason_category: body.reasonCategory, resolution_type: body.resolutionType, requested_amount: requestedAmount, offered_amount: offeredAmount, accepted_amount: acceptedAmount, currency, opted_in: true, social_proof_opt_in: socialProofOptIn, city: socialProofOptIn ? city : null });
   if (error) return NextResponse.json({ error: "Momo could not save that outcome yet." }, { status: 500 });
   return response;

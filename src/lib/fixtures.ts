@@ -138,3 +138,20 @@ export const flightFixtures: FlightCase[] = [
 ];
 
 export const heroFlightCase = flightFixtures[0];
+
+export function createBlankFlightCase(): FlightCase {
+  return {
+    id: "new-case",
+    title: "My flight disruption claim",
+    disruptionType: "delay",
+    airlineReply: "",
+    facts: [
+      fact("flight", "flight_number", "Flight number", null, "You tell Momo", false),
+      fact("route", "route", "Journey", null, "You tell Momo", false),
+      fact("date", "flight_date", "Flight date", null, "You tell Momo", false),
+      fact("delay", "final_arrival_delay_minutes", "Arrival delay", null, "You tell Momo", false),
+      fact("reason", "airline_reason", "Airline's reason", null, "You can add this later", false),
+      fact("booking", "one_booking", "Were all flights on one booking?", "Not sure", "You tell Momo", false),
+    ],
+  };
+}
