@@ -55,7 +55,7 @@ export default function FlightLookup({
   const useTypedDelay = () => {
     const match = manualDelay.trim().match(/^(?:(\d+)\s*h(?:ours?)?\s*)?(?:(\d+)\s*m(?:in(?:utes?)?)?)?$/i);
     const total = match ? Number(match[1] ?? 0) * 60 + Number(match[2] ?? 0) : 0;
-    if (!total) return setMessage("Type a delay such as 2h 30m, or use the Hours and Minutes boxes above.");
+    if (!total) return setMessage("Type a delay such as 2h 30m, or enter the delay using the Hours and Minutes fields above.");
     onUseDelay(total);
     setMessage("Your typed delay has been added. Please check it before continuing.");
   };

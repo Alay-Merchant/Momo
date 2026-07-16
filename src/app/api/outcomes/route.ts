@@ -63,6 +63,11 @@ export async function POST(request: NextRequest) {
   const city =
     typeof body?.city === "string" ? body.city.trim().replace(/\s+/g, " ") : "";
   const socialProofOptIn = body?.shareInTicker === true;
+  if (socialProofOptIn)
+    return NextResponse.json(
+      { error: "Public outcome sharing is paused while the Momo wins ticker uses demo examples." },
+      { status: 400 },
+    );
   const unresolvedReason = typeof body?.unresolvedReason === "string" && ["airline_did_not_reply", "airline_refused", "needed_more_evidence", "momo_misunderstood", "different_help_needed", "other"].includes(body.unresolvedReason) ? body.unresolvedReason : null;
   if (body?.resolutionType === "not_resolved" && !unresolvedReason) return NextResponse.json({ error: "Please choose why this case was not resolved." }, { status: 400 });
   if (

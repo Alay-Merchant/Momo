@@ -1,6 +1,8 @@
 export type ReplyAnalysis = { explanation: string; questions: string[] };
 
-const unsafe = /https?:\/\/|[£€$]\s?\d|\b(lawyer|legal team|court|proceedings|guarantee|definitely entitled|ignore (the )?(rules|instructions))\b/i;
+// Model language may only describe missing information. It cannot make a legal
+// finding; the deterministic decision receipt remains the sole authority.
+const unsafe = /https?:\/\/|[\u00a3\u20ac$]\s?\d|\b(lawyer|legal team|court|proceedings|guarantee|definitely entitled|entitled|eligible|eligibility|liable|liability|legal conclusion|legal finding|breach|violation|regulation|ec261|uk261|demand payment|compensation is due|ignore (the )?(rules|instructions))\b/i;
 
 export function parseReplyAnalysis(value: string): ReplyAnalysis | null {
   try {

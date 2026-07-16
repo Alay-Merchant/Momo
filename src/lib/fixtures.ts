@@ -142,6 +142,41 @@ export const flightFixtures: FlightCase[] = [
 
 export const heroFlightCase = flightFixtures[0];
 
+function demoRejection(id: string, title: string, reply: string, reason: string) {
+  const source = flightFixtures[0];
+  return { ...source, id, title, airlineReply: reply, facts: source.facts.map((item) => item.field === "airline_reason" ? { ...item, value: reason, sourceLabel: "Found in the sample airline reply" } : { ...item }) };
+}
+
+export const rejectionDemoCases: FlightCase[] = [
+  demoRejection("demo-technical", "Demo: technical fault refusal", "We cannot offer compensation because a technical fault was an extraordinary circumstance outside our control.", "Technical fault"),
+  demoRejection("demo-operational", "Demo: vague operational refusal", "We cannot offer compensation because the delay was caused by operational circumstances.", "Operational circumstances"),
+  demoRejection("demo-weather", "Demo: weather refusal to check", "We cannot offer compensation because severe weather at the departure airport affected the scheduled service.", "Severe weather"),
+];
+
+// Deliberately messy, no-personal-data scenarios used for safety and journey-flow testing.
+export const messyJourneyFixtures: FlightCase[] = [
+  {
+    id: "london-peru-diversion",
+    title: "London to Lima via Bogota: emergency diversion and missed connection",
+    disruptionType: "missed_connection",
+    airlineReply: "The flight diverted for an operational emergency. We provided a voucher and will contact you about your onward flight.",
+    facts: [
+      fact("route", "route", "Journey", "London to Lima via Bogota", "Sample itinerary"),
+      fact("departure-region", "departure_region", "Where did your journey start?", "UK", "Sample itinerary", true),
+      fact("arrival-region", "arrival_region", "Where was your final destination?", "Other", "Sample itinerary", true),
+      fact("carrier-region", "operating_carrier_region", "Where is the operating airline based?", "Other", "Needs confirmation"),
+      fact("delay", "final_arrival_delay_minutes", "Arrival delay", 720, "Sample timeline"),
+      fact("booking", "one_booking", "Were all flights on one booking?", "Yes", "Sample itinerary", true),
+      fact("connections", "connection_airports", "Connection airport(s)", "Bogota (BOG)", "Sample itinerary"),
+      fact("stranded", "disruption_location", "Where were you stranded or diverted to?", "A remote diversion airport", "Sample timeline"),
+    ],
+  },
+  sampleCase("australia-missed-connection", "London to Perth via Singapore: overnight missed connection", "missed_connection", "SQ317", "London to Perth via Singapore", "8 August 2027", 815, "Late inbound aircraft", "Yes"),
+  sampleCase("island-weather", "Manchester to Fiji via Los Angeles: weather disruption", "cancellation", "FJ812", "Manchester to Fiji via Los Angeles", "11 September 2027", 1360, "Severe weather", "Yes"),
+  sampleCase("island-self-transfer", "Edinburgh to Madeira: self-transfer missed after delay", "missed_connection", "U2193", "Edinburgh to Madeira via Lisbon", "22 September 2027", 430, "Operational circumstances", "No"),
+  sampleCase("pacific-diversion", "London to Tahiti: diversion and inadequate care", "delay", "TN008", "London to Tahiti via Los Angeles", "4 October 2027", 680, "Diversion for a technical inspection", "Yes"),
+];
+
 export function createBlankFlightCase(): FlightCase {
   return {
     id: "new-case",
@@ -161,7 +196,11 @@ export function createBlankFlightCase(): FlightCase {
       fact("date", "flight_date", "Flight date", null, "You tell Momo", false),
       fact("delay", "final_arrival_delay_minutes", "Arrival delay", null, "You tell Momo", false),
       fact("reason", "airline_reason", "Airline's reason", null, "You can add this later", false),
+      fact("story", "traveller_story", "What happened?", null, "Your private draft story", false),
       fact("booking", "one_booking", "Were all flights on one booking?", "Not sure", "You tell Momo", false),
+      fact("connections", "connection_airports", "Connection airport(s)", null, "For example: Bogota (BOG), Madrid (MAD)", false),
+      fact("disrupted-leg", "disrupted_leg", "Which flight or part of the journey was disrupted?", null, "For example: London to Bogota, or the onward flight", false),
+      fact("stranded-at", "disruption_location", "Where were you stranded or diverted to?", null, "Helpful for care, expenses, and your timeline", false),
       fact("cancellation-notice", "cancellation_notice_days", "For a cancellation: how many days before departure were you told?", null, "Only needed if your flight was cancelled", false),
       fact("rerouting-delay", "rerouting_arrival_delay_minutes", "For a cancellation: how late did the replacement flight arrive?", null, "Only needed if you took a replacement flight", false),
       fact("boarding-ready", "boarding_ready", "For denied boarding: were you at the gate on time with a valid ticket?", null, "Only needed if you were denied boarding", false),
