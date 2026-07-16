@@ -99,16 +99,11 @@ npm run build
 
 The suite covers deterministic rules, compensation boundaries, source freshness, hostile model output, prompt injection, request limits, story extraction, connection/self-transfer safety, currency handling, and mobile-oriented UI safeguards.
 
-## Hackathon submission checklist
+## Submission and public-site notes
 
-- [ ] Deploy a working public demo URL.
-- [ ] Add the live URL above.
-- [ ] Add a public YouTube demo under three minutes with English audio.
-- [ ] Demonstrate the refusal -> exact quote -> neutral question -> editable draft flow.
-- [ ] Explain how Codex and GPT-5.6 were used.
-- [ ] Include the repository URL and `/feedback` Codex Session ID in Devpost.
-- [ ] Ensure the repository is public or shared with the required judges.
-- [ ] Confirm no keys, private correspondence, personal data, or unlicensed material appear in the repository or video.
+For the OpenAI Build Week submission, this repository accompanies a working demo, a public demonstration video, and a clear explanation of how Codex and GPT-5.6 contributed to the project. The recommended demo journey is: airline refusal -> exact quote -> neutral follow-up question -> editable draft.
+
+If Momo becomes publicly available, keep the product limits and privacy safeguards visible, publish a full Privacy Notice, use durable distributed rate limits and upload scanning, maintain reviewed rule sources, and obtain appropriate legal and data-protection review before presenting the service at scale.
 
 ## Product limits
 
