@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 export type AccountUser = {
   email: string;
@@ -34,6 +34,14 @@ export default function AccountPanel({
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [user, setUser] = useState<AccountUser | null>(null);
   const [message, setMessage] = useState("");
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+
+  const closeModal = () => {
+    setOpen(false);
+    window.setTimeout(() => triggerRef.current?.focus(), 0);
+  };
 
   const update = useCallback(
     (next: AccountUser | null) => {
@@ -49,6 +57,22 @@ export default function AccountPanel({
       .then((data) => update(data?.user ?? null))
       .catch(() => undefined);
   }, [update]);
+
+  useEffect(() => {
+    if (!open) return;
+    const focusTimer = window.setTimeout(() => emailRef.current?.focus(), 0);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") return closeModal();
+      if (event.key !== "Tab" || !dialogRef.current) return;
+      const items = Array.from(dialogRef.current.querySelectorAll<HTMLElement>('button, input, a[href], select, textarea, [tabindex]:not([tabindex="-1"])')).filter((item) => !item.hasAttribute("disabled"));
+      if (!items.length) return;
+      const first = items[0]; const last = items.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => { window.clearTimeout(focusTimer); window.removeEventListener("keydown", onKeyDown); };
+  }, [open]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -125,7 +149,7 @@ export default function AccountPanel({
 
   return (
     <>
-      <button className="account-button" onClick={() => setOpen(true)}>
+      <button className="account-button" onClick={() => setOpen(true)} ref={triggerRef}>
         Sign in or save a claim
       </button>
       {open && (
@@ -134,12 +158,13 @@ export default function AccountPanel({
             aria-labelledby="account-title"
             aria-modal="true"
             className="auth-modal"
+            ref={dialogRef}
             role="dialog"
           >
             <button
               aria-label="Close"
               className="close"
-              onClick={() => setOpen(false)}
+              onClick={closeModal}
             >
               {"\u00d7"}
             </button>
@@ -162,6 +187,7 @@ export default function AccountPanel({
                 Email address
                 <input
                   autoComplete="email"
+                  ref={emailRef}
                   maxLength={254}
                   onChange={(event) => setEmail(event.target.value)}
                   required

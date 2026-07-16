@@ -10,20 +10,27 @@ import { CommunityInsights, OutcomePanel } from "@/app/community-panels";
 import EscalationCard from "@/app/escalation-card";
 import FlightLookup from "@/app/flight-lookup";
 import GlobalRightsCard from "@/app/global-rights-card";
+import JourneyTimeline from "@/app/journey-timeline";
 import MomoMascot, { MomoMoodCarousel } from "@/app/momo-mascot";
 import OfferCompass from "@/app/offer-compass";
 import ProofMap from "@/app/proof-map";
+import RejectionDissector from "@/app/rejection-dissector";
 import SocialProofTicker from "@/app/social-proof-ticker";
+import StoryIntake from "@/app/story-intake";
+import StrandedNow from "@/app/stranded-now";
 import TrustReceipt from "@/app/trust-receipt";
 import WorkTripPack from "@/app/work-trip-pack";
 import type { CaseFact, FlightCase } from "@/lib/case-types";
-import { createBlankFlightCase, flightFixtures } from "@/lib/fixtures";
+import { createBlankFlightCase, flightFixtures, rejectionDemoCases } from "@/lib/fixtures";
 import {
   calculateCompensation,
   evaluateFlightCase,
   flightRuleCards,
 } from "@/lib/flight-rules";
 import { globalPassengerGuidance } from "@/lib/global-passenger-rights";
+import { getHelpGuide, type HelpGuide } from "@/lib/help-guidance";
+import type { RejectionAnalysis } from "@/lib/rejection-analysis";
+import { airportDistanceKm } from "@/lib/airport-distance";
 
 type Screen = "start" | "facts" | "result" | "reply" | "draft";
 type ReplyEvent = {
@@ -32,6 +39,7 @@ type ReplyEvent = {
   text: string;
   draft?: string;
   questions?: string[];
+  dissection?: RejectionAnalysis | null;
   addedAt: string;
 };
 
@@ -78,10 +86,8 @@ export default function Home() {
 
 function guidedCase(topic: string | null) {
   const blank = createBlankFlightCase();
-  const disruptionByTopic: Record<string, FlightCase["disruptionType"]> = {
-    delay: "delay", cancellation: "cancellation", missed_connection: "missed_connection", denied_boarding: "denied_boarding",
-  };
-  return { ...blank, disruptionType: disruptionByTopic[topic ?? ""] ?? blank.disruptionType };
+  const guide = getHelpGuide(topic);
+  return { ...blank, disruptionType: guide?.disruptionType ?? blank.disruptionType };
 }
 
 function MomoHome() {
@@ -101,20 +107,23 @@ function MomoHome() {
   const [claimStage, setClaimStage] = useState<ClaimStage>("draft_ready");
   const [evidenceStatus, setEvidenceStatus] = useState("");
   const [isReadingEvidence, setIsReadingEvidence] = useState(false);
+  const [activeGuide, setActiveGuide] = useState<HelpGuide | null>(null);
 
   useEffect(() => {
     const topic = new URLSearchParams(window.location.search).get("help");
     if (!topic) return;
     const timer = window.setTimeout(() => {
       const blank = guidedCase(topic);
+      const guide = getHelpGuide(topic);
       setCaseData(blank);
       setFacts(blank.facts);
       setReply("");
       setReplyHistory([]);
       setGeneratedDraft("");
       setClaimStage("draft_ready");
-      setScreen("facts");
-      setJourneyMessage("Momo has opened a guided case. Start with the details you know; you can leave the rest for later.");
+      setActiveGuide(guide);
+      setScreen(guide?.screen ?? "facts");
+      setJourneyMessage(guide ? guide.description : "Momo has opened a guided case. Start with the details you know; you can leave the rest for later.");
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
@@ -181,6 +190,7 @@ function MomoHome() {
     setReplyHistory([]);
     setGeneratedDraft("");
     setClaimStage("draft_ready");
+    setActiveGuide(null);
     setJourneyMessage("");
     setScreen("facts");
   };
@@ -192,8 +202,36 @@ function MomoHome() {
     setReplyHistory([]);
     setGeneratedDraft("");
     setClaimStage("draft_ready");
+    setActiveGuide(null);
     setJourneyMessage("");
     setScreen("facts");
+  };
+  const loadRejectionDemo = (id: string) => {
+    const sample = rejectionDemoCases.find((item) => item.id === id);
+    if (!sample) return;
+    setCaseData(sample);
+    setFacts(sample.facts);
+    setReply(sample.airlineReply);
+    setReplyHistory([]);
+    setGeneratedDraft("");
+    setClaimStage("draft_ready");
+    setActiveGuide(null);
+    setJourneyMessage("Demo case loaded. This is sample data, not a promise of compensation.");
+    setScreen("reply");
+  };
+  const beginGuide = (topic: HelpGuide["topic"]) => {
+    const guide = getHelpGuide(topic);
+    if (!guide) return;
+    const blank = guidedCase(topic);
+    setCaseData(blank);
+    setFacts(blank.facts);
+    setReply("");
+    setReplyHistory([]);
+    setGeneratedDraft("");
+    setClaimStage("draft_ready");
+    setActiveGuide(guide);
+    setJourneyMessage(guide.description);
+    setScreen(guide.screen);
   };
   const goTo = (next: Screen) => {
     if ((next === "result" || next === "reply") && !factsReady)
@@ -208,8 +246,8 @@ function MomoHome() {
     setScreen(next);
   };
   const updateFact = (id: string, value: string) =>
-    setFacts((current) =>
-      current.map((fact) =>
+    setFacts((current) => {
+      const changed = current.map((fact) =>
         fact.id === id
           ? {
               ...fact,
@@ -221,8 +259,33 @@ function MomoHome() {
               sourceLabel: "You told Momo",
             }
           : fact,
-      ),
-    );
+      );
+      const edited = changed.find((fact) => fact.id === id);
+      if (!edited || !["departure_airport", "arrival_airport"].includes(edited.field))
+        return changed;
+
+      const distance = airportDistanceKm(
+        changed.find((fact) => fact.field === "departure_airport")?.value,
+        changed.find((fact) => fact.field === "arrival_airport")?.value,
+      );
+      if (!distance) return changed;
+      const existing = changed.find((fact) => fact.field === "flight_distance_km");
+      if (existing && existing.sourceLabel === "You told Momo") return changed;
+      const distanceFact: CaseFact = {
+        id: existing?.id ?? "distance",
+        field: "flight_distance_km",
+        label: "Flight distance",
+        value: distance,
+        provenance: "DOCUMENT_EXTRACTED",
+        sourceLabel: "Momo found this from the airport pair — please check",
+        confirmed: false,
+      };
+      return existing
+        ? changed.map((fact) =>
+            fact.field === "flight_distance_km" ? distanceFact : fact,
+          )
+        : [...changed, distanceFact];
+    });
   const updateDelay = (hours: string, minutes: string) => {
     const total = Math.max(
       0,
@@ -343,6 +406,7 @@ function MomoHome() {
           questions: Array.isArray(data.questions)
             ? data.questions.filter((question: unknown) => typeof question === "string").slice(0, 3)
             : [],
+          dissection: data.dissection && typeof data.dissection === "object" ? data.dissection as RejectionAnalysis : null,
           addedAt: new Date().toLocaleString("en-GB"),
         },
       ]);
@@ -448,6 +512,7 @@ function MomoHome() {
 
   return (
     <main className="momo-app">
+      <a className="skip-link" href="#momo-main">Skip to main content</a>
       <header className="topbar">
         <button className="brand" onClick={() => setScreen("start")}>
           <Panda />
@@ -462,7 +527,7 @@ function MomoHome() {
       {screen === "start" && (
         <>
           <SocialProofTicker />
-          <section className="landing">
+          <section className="landing" id="momo-main">
             <div className="hero-copy">
               <div className="momo-welcome">
                 <MomoMoodCarousel />
@@ -486,6 +551,14 @@ function MomoHome() {
                 <button className="secondary" onClick={chooseSample}>
                   View a sample case
                 </button>
+              </div>
+              <div className="quick-start" aria-label="Quick ways to start">
+                <b>Start even faster</b>
+                <div>
+                  <button className="quick-choice" onClick={() => beginGuide("rejection")}>Paste an airline reply</button>
+                  <button className="quick-choice" onClick={() => beginGuide("lookup")}>Find my flight</button>
+                  <button className="quick-choice" onClick={() => beginGuide("offer")}>I have an airline offer</button>
+                </div>
               </div>
               <p className="small">
                 UK261 and EU261 information and drafting support. Momo is not a
@@ -524,6 +597,7 @@ function MomoHome() {
               type="button"
               onClick={() => goTo("facts")}
               className={screen === "facts" ? "active" : "done"}
+              aria-current={screen === "facts" ? "step" : undefined}
             >
               1. Check facts
             </button>
@@ -537,6 +611,7 @@ function MomoHome() {
                     ? "done"
                     : ""
               }
+              aria-current={screen === "result" ? "step" : undefined}
             >
               2. What Momo found
             </button>
@@ -546,6 +621,7 @@ function MomoHome() {
               className={
                 screen === "reply" ? "active" : screen === "draft" ? "done" : ""
               }
+              aria-current={screen === "reply" ? "step" : undefined}
             >
               3. Airline reply
             </button>
@@ -553,6 +629,7 @@ function MomoHome() {
               type="button"
               onClick={() => goTo("draft")}
               className={screen === "draft" ? "active" : ""}
+              aria-current={screen === "draft" ? "step" : undefined}
             >
               4. Your message
             </button>
@@ -565,7 +642,13 @@ function MomoHome() {
               {journeyMessage}
             </p>
           )}
-          <section className="workspace">
+          <section className="workspace" id="momo-main">
+            {activeGuide && (
+              <aside className="guide-intro" aria-label="Your selected guide">
+                <MomoMascot mood="listening" compact />
+                <div><p className="receipt-eyebrow">YOUR STARTING POINT</p><h2>{activeGuide.title}</h2><p>{activeGuide.description}</p><b>{activeGuide.nextAction}</b></div>
+              </aside>
+            )}
             {screen === "facts" && (
               <>
                 <div className="section-heading">
@@ -602,9 +685,10 @@ function MomoHome() {
                     </option>
                   </select>
                 </label>
+                <StoryIntake onUse={(story) => { updateFact("story", story); setJourneyMessage("Story saved. Next, add your flight number, travel date, final destination, arrival delay, and whether every flight was on one booking."); }} />
                 <div className="facts">
                   {facts
-                    .filter((fact) => fact.field !== "flight_distance_km")
+                    .filter((fact) => !["flight_distance_km", "traveller_story"].includes(fact.field))
                     .filter((fact) => !["cancellation_notice_days", "rerouting_arrival_delay_minutes"].includes(fact.field) || caseData.disruptionType === "cancellation")
                     .filter((fact) => !["boarding_ready", "denied_boarding_voluntary", "travel_documents_valid"].includes(fact.field) || caseData.disruptionType === "denied_boarding")
                     .map((fact) => (
@@ -740,6 +824,8 @@ function MomoHome() {
                     <Pill kind="amber">Optional</Pill>
                   </div>
                 </div>
+                <JourneyTimeline facts={facts} />
+                <StrandedNow location={String(facts.find((fact) => fact.field === "disruption_location")?.value ?? "")} />
                 <FlightLookup
                   flightNumber={String(
                     facts.find((fact) => fact.field === "flight_number")
@@ -879,6 +965,7 @@ function MomoHome() {
                   </small>
                 </section>
                 <GlobalRightsCard guidance={internationalGuidance} />
+                {activeGuide?.topic === "offer" && <OfferCompass amount={null} currency={null} />}
                 <TrustReceipt
                   assessment={assessment}
                   facts={facts}
@@ -957,6 +1044,12 @@ function MomoHome() {
                       </p>
                     </div>
                   </div>
+                  {replyHistory.length === 0 && (
+                    <section className="demo-rejections" aria-label="Try a sample airline refusal">
+                      <b>Try a safe demo refusal</b><p>These examples show that Momo can challenge vague reasons and also recognise when weather needs careful checking.</p>
+                      <div>{rejectionDemoCases.map((sample) => <button className="secondary" key={sample.id} onClick={() => loadRejectionDemo(sample.id)}>{sample.title.replace("Demo: ", "")}</button>)}</div>
+                    </section>
+                  )}
                   {replyHistory.length > 0 && (
                     <div className="chat-thread">
                       {replyHistory.map((event) => (
@@ -979,6 +1072,7 @@ function MomoHome() {
                               </ul>
                             </div>
                           ) : null}
+                    {event.author === "momo" && event.dissection ? <RejectionDissector analysis={event.dissection} onAddQuestion={(question) => { setGeneratedDraft((current) => `${current}${current ? "\n\n" : ""}${question}`); setJourneyMessage("Momo added that question to your editable message."); }} /> : null}
                           {event.author === "momo" && (
                             <button
                               className="text-button"
