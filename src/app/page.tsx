@@ -5,11 +5,17 @@ import Link from "next/link";
 import AccountPanel, { type AccountUser } from "@/app/account-panel";
 import AirportHelper from "@/app/airport-helper";
 import CareChecklist from "@/app/care-checklist";
+import ClaimCommandCentre, { type ClaimStage } from "@/app/claim-command-centre";
 import { CommunityInsights, OutcomePanel } from "@/app/community-panels";
+import EscalationCard from "@/app/escalation-card";
 import FlightLookup from "@/app/flight-lookup";
+import GlobalRightsCard from "@/app/global-rights-card";
+import MomoMascot, { MomoMoodCarousel } from "@/app/momo-mascot";
+import OfferCompass from "@/app/offer-compass";
 import ProofMap from "@/app/proof-map";
 import SocialProofTicker from "@/app/social-proof-ticker";
 import TrustReceipt from "@/app/trust-receipt";
+import WorkTripPack from "@/app/work-trip-pack";
 import type { CaseFact, FlightCase } from "@/lib/case-types";
 import { createBlankFlightCase, flightFixtures } from "@/lib/fixtures";
 import {
@@ -17,6 +23,7 @@ import {
   evaluateFlightCase,
   flightRuleCards,
 } from "@/lib/flight-rules";
+import { globalPassengerGuidance } from "@/lib/global-passenger-rights";
 
 type Screen = "start" | "facts" | "result" | "reply" | "draft";
 type ReplyEvent = {
@@ -24,6 +31,7 @@ type ReplyEvent = {
   author: "airline" | "momo";
   text: string;
   draft?: string;
+  questions?: string[];
   addedAt: string;
 };
 
@@ -78,6 +86,7 @@ export default function Home() {
   const [account, setAccount] = useState<AccountUser | null>(null);
   const [saveMessage, setSaveMessage] = useState("");
   const [copied, setCopied] = useState(false);
+  const [claimStage, setClaimStage] = useState<ClaimStage>("draft_ready");
 
   const assessment = useMemo(
     () => evaluateFlightCase({ ...caseData, facts }),
@@ -90,6 +99,25 @@ export default function Home() {
   const selectedRuleCards = useMemo(
     () => flightRuleCards.filter((card) => assessment.ruleIds.includes(card.id)),
     [assessment.ruleIds],
+  );
+  const internationalGuidance = useMemo(
+    () =>
+      globalPassengerGuidance({
+        departureAirport: facts.find((fact) => fact.field === "departure_airport")?.value,
+        arrivalAirport: facts.find((fact) => fact.field === "arrival_airport")?.value,
+        disruptionType: caseData.disruptionType,
+        delayMinutes: Number(facts.find((fact) => fact.field === "final_arrival_delay_minutes")?.value ?? 0) || null,
+        airlineReason: String(facts.find((fact) => fact.field === "airline_reason")?.value ?? ""),
+        cancellationNoticeDays: (() => {
+          const value = facts.find((fact) => fact.field === "cancellation_notice_days")?.value;
+          return typeof value === "number" && Number.isFinite(value) ? value : null;
+        })(),
+        boardingReady: String(facts.find((fact) => fact.field === "boarding_ready")?.value ?? ""),
+        volunteered: String(facts.find((fact) => fact.field === "denied_boarding_voluntary")?.value ?? ""),
+        documentsValid: String(facts.find((fact) => fact.field === "travel_documents_valid")?.value ?? ""),
+        hasUkOrEuFramework: assessment.frameworkCandidates.length > 0,
+      }),
+    [assessment.frameworkCandidates.length, caseData.disruptionType, facts],
   );
   const factsReady = [
     "flight_number",
@@ -104,6 +132,15 @@ export default function Home() {
     replyHistory.filter((event) => event.author === "airline").at(-1)?.text ??
     "";
   const confirmedCount = facts.filter((fact) => fact.confirmed).length;
+  const canReviewReply = Boolean(reply.trim() || latestAirlineReply);
+  const isReviewingReply = replyStatus.startsWith("Momo is");
+  const currentStep = {
+    start: "Start a new Momo case",
+    facts: "Step 1 of 4: check the facts",
+    result: "Step 2 of 4: see what Momo found",
+    reply: "Step 3 of 4: add the airline's reply",
+    draft: "Step 4 of 4: review your message",
+  }[screen];
 
   const startOwnCase = () => {
     const blank = createBlankFlightCase();
@@ -112,6 +149,7 @@ export default function Home() {
     setReply("");
     setReplyHistory([]);
     setGeneratedDraft("");
+    setClaimStage("draft_ready");
     setJourneyMessage("");
     setScreen("facts");
   };
@@ -122,6 +160,7 @@ export default function Home() {
     setReply(sample.airlineReply);
     setReplyHistory([]);
     setGeneratedDraft("");
+    setClaimStage("draft_ready");
     setJourneyMessage("");
     setScreen("facts");
   };
@@ -270,6 +309,9 @@ export default function Home() {
           author: "momo",
           text: data.explanation,
           draft,
+          questions: Array.isArray(data.questions)
+            ? data.questions.filter((question: unknown) => typeof question === "string").slice(0, 3)
+            : [],
           addedAt: new Date().toLocaleString("en-GB"),
         },
       ]);
@@ -280,6 +322,47 @@ export default function Home() {
       setReplyStatus(
         "Momo could not connect right now. Your airline reply is still kept in this browser.",
       );
+    }
+  };
+  const loadClaim = async (claimId: string) => {
+    setJourneyMessage("");
+    setSaveMessage("");
+    try {
+      const response = await fetch(`/api/claims/${encodeURIComponent(claimId)}`);
+      const data = await response.json();
+      const saved = data?.claim?.case_data;
+      if (!response.ok || !saved || typeof saved !== "object") {
+        return setJourneyMessage(data.error ?? "Momo could not open that claim.");
+      }
+      const fresh = createBlankFlightCase();
+      const disruptionTypes = ["delay", "cancellation", "denied_boarding", "missed_connection"];
+      const savedDisruption = disruptionTypes.includes(saved.disruptionType)
+        ? saved.disruptionType as FlightCase["disruptionType"]
+        : fresh.disruptionType;
+      const restoredFacts = Array.isArray(saved.facts)
+        ? saved.facts.filter((fact: unknown): fact is CaseFact =>
+            fact !== null && typeof fact === "object" && "id" in fact && "field" in fact && "label" in fact && "confirmed" in fact,
+          )
+        : fresh.facts;
+      const restoredHistory = Array.isArray(saved.replyHistory)
+        ? saved.replyHistory.filter((event: unknown): event is ReplyEvent =>
+            event !== null && typeof event === "object" && "id" in event && "author" in event && "text" in event && "addedAt" in event,
+          )
+        : [];
+      const restoredDraft = typeof saved.generatedDraft === "string"
+        ? saved.generatedDraft.slice(0, 5_000)
+        : "";
+      const allowedStages: ClaimStage[] = ["draft_ready", "sent", "waiting", "offer_received", "resolved"];
+      setClaimStage(allowedStages.includes(saved.claimStage) ? saved.claimStage : "draft_ready");
+      setCaseData({ ...fresh, title: String(data.claim.title ?? fresh.title).slice(0, 120), disruptionType: savedDisruption });
+      setFacts(restoredFacts);
+      setReplyHistory(restoredHistory);
+      setGeneratedDraft(restoredDraft);
+      setReply("");
+      setScreen(restoredDraft ? "draft" : restoredHistory.length ? "reply" : "facts");
+      setJourneyMessage("Your saved claim is open. Pick up from the next step when you are ready.");
+    } catch {
+      setJourneyMessage("Momo could not open that claim right now. Please try again.");
     }
   };
   const saveClaim = async () => {
@@ -294,6 +377,7 @@ export default function Home() {
           facts,
           replyHistory,
           generatedDraft,
+          claimStage,
         },
       }),
     });
@@ -323,7 +407,7 @@ export default function Home() {
         <Link className="nav-button" href="/help">
           What can I help with?
         </Link>
-        <AccountPanel onUserChange={setAccount} />
+        <AccountPanel onOpenClaim={loadClaim} onUserChange={setAccount} />
       </header>
       {screen === "start" && (
         <>
@@ -331,7 +415,7 @@ export default function Home() {
           <section className="landing">
             <div className="hero-copy">
               <div className="momo-welcome">
-                <Panda />
+                <MomoMoodCarousel />
                 <span className="speech">
                   Hello, I&apos;m Momo. What happened?
                 </span>
@@ -423,6 +507,9 @@ export default function Home() {
               4. Your message
             </button>
           </nav>
+          <p className="current-step" role="status">
+            {currentStep}
+          </p>
           {journeyMessage && (
             <p className="journey-message" role="status">
               {journeyMessage}
@@ -432,7 +519,7 @@ export default function Home() {
             {screen === "facts" && (
               <>
                 <div className="section-heading">
-                  <Panda />
+                  <MomoMascot mood="thinking" compact />
                   <div>
                     <h1>Tell Momo the key details</h1>
                     <p>
@@ -477,6 +564,8 @@ export default function Home() {
                           <small>
                             {fact.field === "final_arrival_delay_minutes"
                               ? "How late did you reach your final destination?"
+                              : fact.field === "operating_carrier_region"
+                                ? "This means the airline that actually flew the plane. If you are not sure, choose ‘I’m not sure’ and Momo will stay cautious."
                               : fact.sourceLabel}
                           </small>
                         </div>
@@ -616,6 +705,9 @@ export default function Home() {
                     )
                   }
                 />
+                <p className="facts-help">
+                  Not sure about a field? <Link href="/help">See examples of what Momo can help with</Link> or enter what you know. Momo will show what is still needed.
+                </p>
                 <div className="actions">
                   <button
                     className="secondary"
@@ -639,7 +731,7 @@ export default function Home() {
             {screen === "result" && (
               <>
                 <div className="section-heading">
-                  <Panda />
+                  <MomoMascot mood="thinking" compact />
                   <div>
                     <h1>Here is what Momo found</h1>
                     <p>
@@ -736,6 +828,7 @@ export default function Home() {
                     . Last checked 15 July 2026.
                   </small>
                 </section>
+                <GlobalRightsCard guidance={internationalGuidance} />
                 <TrustReceipt
                   assessment={assessment}
                   facts={facts}
@@ -745,6 +838,8 @@ export default function Home() {
                   reason={compensation.reason}
                 />
                 <CareChecklist disruptionType={caseData.disruptionType} />
+                <WorkTripPack />
+                <EscalationCard frameworks={assessment.frameworkCandidates} />
                 <CommunityInsights
                   disruptionType={caseData.disruptionType}
                   delayMinutes={
@@ -789,7 +884,7 @@ export default function Home() {
             {screen === "reply" && (
               <>
                 <div className="section-heading">
-                  <Panda />
+                  <MomoMascot mood="listening" compact />
                   <div>
                     <h1>Talk through the airline&apos;s replies</h1>
                     <p>
@@ -803,7 +898,7 @@ export default function Home() {
                   aria-label="Your claim conversation"
                 >
                   <div className="chat-intro">
-                    <Panda />
+                    <MomoMascot mood={replyStatus ? "working" : "listening"} compact />
                     <div>
                       <b>Momo</b>
                       <p>
@@ -824,6 +919,16 @@ export default function Home() {
                           </b>
                           <small>{event.addedAt}</small>
                           <p>{event.text}</p>
+                          {event.author === "momo" && event.questions?.length ? (
+                            <div className="chat-questions">
+                              <b>What to check next</b>
+                              <ul>
+                                {event.questions.map((question) => (
+                                  <li key={question}>{question}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null}
                           {event.author === "momo" && (
                             <button
                               className="text-button"
@@ -852,13 +957,25 @@ export default function Home() {
                       <button className="secondary" onClick={addReply}>
                         Add airline reply
                       </button>
-                      <button className="primary" onClick={generateReply}>
+                      <button
+                        className="primary"
+                        disabled={!canReviewReply || isReviewingReply}
+                        onClick={generateReply}
+                      >
                         Ask Momo for a reply <span>→</span>
+                      </button>
+                      <button
+                        className="secondary"
+                        disabled={!canReviewReply || isReviewingReply}
+                        onClick={() => generateReply("deep")}
+                      >
+                        Need a deeper check?
                       </button>
                     </div>
                     <small>
-                      Momo uses your confirmed facts and the latest reply.
-                      Please check and edit its draft before sending.
+                      Momo uses your confirmed facts and the latest reply. A
+                      deeper check may take a little longer. Please check and
+                      edit every draft before sending.
                     </small>
                     {replyStatus && (
                       <p className="insight-message" role="status">
@@ -880,7 +997,7 @@ export default function Home() {
             {screen === "draft" && (
               <>
                 <div className="section-heading">
-                  <Panda />
+                  <MomoMascot mood="celebrating" compact />
                   <div>
                     <h1>Your editable message</h1>
                     <p>
@@ -905,6 +1022,14 @@ export default function Home() {
                   assessment={assessment}
                   cards={selectedRuleCards}
                 />
+                <ClaimCommandCentre
+                  stage={claimStage}
+                  onChange={setClaimStage}
+                />
+                <OfferCompass
+                  amount={compensation.amount}
+                  currency={compensation.currency}
+                />
                 <label className="letter-label" htmlFor="letter">
                   Message to the airline
                 </label>
@@ -928,6 +1053,26 @@ export default function Home() {
                   airline&apos;s official claim or complaint channel when you
                   are ready.
                 </p>
+                <section
+                  className="draft-next-steps"
+                  aria-label="After you send your message"
+                >
+                  <b>After you send it</b>
+                  <ol>
+                    <li>
+                      Save a copy of the message, airline form, and any
+                      receipt.
+                    </li>
+                    <li>
+                      Set yourself a 14-day reminder to check for a response.
+                      This is your reminder, not a legal deadline.
+                    </li>
+                    <li>
+                      When the airline replies, return here and add it to your
+                      case story.
+                    </li>
+                  </ol>
+                </section>
                 <OutcomePanel
                   disruptionType={caseData.disruptionType}
                   delayMinutes={

@@ -32,6 +32,15 @@ test("safe template is grounded in the deterministic receipt", () => {
   assert.equal(replyIsGrounded(safeTemplate(receipt), receipt), true);
 });
 
+test("safe template adapts when the airline has already named a cause", () => {
+  const flightCase = caseFromUntrustedInput(input);
+  assert.ok(flightCase);
+  const reply = safeTemplate(createDecisionReceipt(flightCase), "The delay was caused by a technical issue.");
+  assert.match(reply.explanation, /named “technical”/);
+  assert.equal(reply.questions.some((question) => question.includes("specific event")), false);
+  assert.match(reply.draft, /reference to technical/);
+});
+
 test("invented amounts, legal representation, and court threats are rejected", () => {
   const flightCase = caseFromUntrustedInput(input);
   assert.ok(flightCase);

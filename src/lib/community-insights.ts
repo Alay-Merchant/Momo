@@ -1,6 +1,6 @@
 export const disruptionTypes = ["delay", "cancellation", "missed_connection", "denied_boarding"] as const;
 export const reasonCategories = ["operational", "technical", "crew", "weather", "air_traffic_control", "security", "other", "unspecified"] as const;
-export const resolutionTypes = ["cash_payment", "voucher", "refund", "rerouting", "expenses", "no_offer", "other"] as const;
+export const resolutionTypes = ["cash_payment", "voucher", "refund", "rerouting", "expenses", "no_offer", "not_resolved", "other"] as const;
 
 export type DisruptionType = (typeof disruptionTypes)[number];
 export type ReasonCategory = (typeof reasonCategories)[number];
