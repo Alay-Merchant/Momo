@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import AccountPanel, { type AccountUser } from "@/app/account-panel";
 import AirportHelper from "@/app/airport-helper";
@@ -73,6 +73,18 @@ function requiredFact(facts: CaseFact[], field: string) {
 }
 
 export default function Home() {
+  return <MomoHome />;
+}
+
+function guidedCase(topic: string | null) {
+  const blank = createBlankFlightCase();
+  const disruptionByTopic: Record<string, FlightCase["disruptionType"]> = {
+    delay: "delay", cancellation: "cancellation", missed_connection: "missed_connection", denied_boarding: "denied_boarding",
+  };
+  return { ...blank, disruptionType: disruptionByTopic[topic ?? ""] ?? blank.disruptionType };
+}
+
+function MomoHome() {
   const [screen, setScreen] = useState<Screen>("start");
   const [caseData, setCaseData] = useState<FlightCase>(createBlankFlightCase);
   const [facts, setFacts] = useState<CaseFact[]>(
@@ -87,6 +99,25 @@ export default function Home() {
   const [saveMessage, setSaveMessage] = useState("");
   const [copied, setCopied] = useState(false);
   const [claimStage, setClaimStage] = useState<ClaimStage>("draft_ready");
+  const [evidenceStatus, setEvidenceStatus] = useState("");
+  const [isReadingEvidence, setIsReadingEvidence] = useState(false);
+
+  useEffect(() => {
+    const topic = new URLSearchParams(window.location.search).get("help");
+    if (!topic) return;
+    const timer = window.setTimeout(() => {
+      const blank = guidedCase(topic);
+      setCaseData(blank);
+      setFacts(blank.facts);
+      setReply("");
+      setReplyHistory([]);
+      setGeneratedDraft("");
+      setClaimStage("draft_ready");
+      setScreen("facts");
+      setJourneyMessage("Momo has opened a guided case. Start with the details you know; you can leave the rest for later.");
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const assessment = useMemo(
     () => evaluateFlightCase({ ...caseData, facts }),
@@ -322,6 +353,25 @@ export default function Home() {
       setReplyStatus(
         "Momo could not connect right now. Your airline reply is still kept in this browser.",
       );
+    }
+  };
+  const readEvidence = async (file: File | null) => {
+    if (!file || isReadingEvidence) return;
+    setEvidenceStatus("Momo is reading the file privately…");
+    setIsReadingEvidence(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const response = await fetch("/api/momo/read-evidence", { method: "POST", body: form });
+      const data = await response.json();
+      if (!response.ok) return setEvidenceStatus(data.error ?? "Momo could not read that file right now.");
+      const extracted = typeof data.text === "string" ? data.text : "";
+      setReply((current) => current ? `${current}\n\n${extracted}` : extracted);
+      setEvidenceStatus("Momo added a short, editable reading to the reply box. Check it before asking for a draft.");
+    } catch {
+      setEvidenceStatus("Momo could not read that file right now. You can still paste the relevant wording.");
+    } finally {
+      setIsReadingEvidence(false);
     }
   };
   const loadClaim = async (claimId: string) => {
@@ -953,6 +1003,21 @@ export default function Home() {
                       maxLength={5000}
                       placeholder="Paste the latest airline message here…"
                     />
+                    <div className="evidence-reader">
+                      <label htmlFor="reply-evidence">Or let Momo read a screenshot or PDF</label>
+                      <input
+                        id="reply-evidence"
+                        type="file"
+                        accept="application/pdf,image/png,image/jpeg"
+                        disabled={isReadingEvidence}
+                        onChange={(event) => {
+                          void readEvidence(event.target.files?.[0] ?? null);
+                          event.currentTarget.value = "";
+                        }}
+                      />
+                      <small>PDF, PNG, or JPG up to 3 MB. Momo extracts the useful wording into the editable box; do not upload passports, payment cards, or identity documents.</small>
+                      {evidenceStatus && <p className="insight-message" role="status">{evidenceStatus}</p>}
+                    </div>
                     <div className="reply-actions">
                       <button className="secondary" onClick={addReply}>
                         Add airline reply
