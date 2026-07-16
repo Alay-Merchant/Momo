@@ -287,9 +287,11 @@ function MomoHome() {
         : [...changed, distanceFact];
     });
   const updateDelay = (hours: string, minutes: string) => {
+    const safeHours = Math.max(0, Math.min(168, Number(hours) || 0));
+    const safeMinutes = Math.max(0, Math.min(59, Number(minutes) || 0));
     const total = Math.max(
       0,
-      Math.min(10_080, (Number(hours) || 0) * 60 + (Number(minutes) || 0)),
+      Math.min(10_080, safeHours * 60 + safeMinutes),
     );
     setFacts((current) =>
       current.map((fact) =>
@@ -685,7 +687,7 @@ function MomoHome() {
                     </option>
                   </select>
                 </label>
-                <StoryIntake onUse={(story) => { updateFact("story", story); setJourneyMessage("Story saved. Next, add your flight number, travel date, final destination, arrival delay, and whether every flight was on one booking."); }} />
+                <StoryIntake onUse={(story, extracted) => { setFacts((current) => current.map((fact) => { const match = extracted.find((item) => item.field === fact.field); return match && (fact.value === null || fact.value === "" || fact.field === "one_booking") ? { ...fact, value: match.value, confirmed: false, sourceLabel: "Momo found this - please check" } : fact.id === "story" ? { ...fact, value: story, confirmed: false, sourceLabel: "Your private draft story" } : fact; })); setJourneyMessage(extracted.length ? "Momo filled the draft facts it could clearly find. Please check them, then add the remaining key details." : "Story saved. Next, add your flight number, travel date, final destination, arrival delay, and whether every flight was on one booking."); }} />
                 <div className="facts">
                   {facts
                     .filter((fact) => !["flight_distance_km", "traveller_story"].includes(fact.field))
