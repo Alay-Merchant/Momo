@@ -11,7 +11,7 @@ import EscalationCard from "@/app/escalation-card";
 import FlightLookup from "@/app/flight-lookup";
 import GlobalRightsCard from "@/app/global-rights-card";
 import JourneyTimeline from "@/app/journey-timeline";
-import MomoMascot, { MomoMoodCarousel } from "@/app/momo-mascot";
+import MomoMascot, { type MomoMood } from "@/app/momo-mascot";
 import OfferCompass from "@/app/offer-compass";
 import ProofMap from "@/app/proof-map";
 import RejectionDissector from "@/app/rejection-dissector";
@@ -79,6 +79,14 @@ function requiredFact(facts: CaseFact[], field: string) {
   const value = facts.find((fact) => fact.field === field)?.value;
   return value !== null && value !== "";
 }
+const requiredToContinue = new Set([
+  "flight_number", "route", "departure_region", "arrival_region",
+  "operating_carrier_region", "flight_date", "final_arrival_delay_minutes",
+]);
+const optionalFacts = new Set([
+  "departure_airport", "arrival_airport", "operating_carrier_name", "journey_is_intra_eu",
+  "airline_reason", "connection_airports", "disrupted_leg", "disruption_location",
+]);
 
 export default function Home() {
   return <MomoHome />;
@@ -159,15 +167,7 @@ function MomoHome() {
       }),
     [assessment.frameworkCandidates.length, caseData.disruptionType, facts],
   );
-  const factsReady = [
-    "flight_number",
-    "route",
-    "departure_region",
-    "arrival_region",
-    "operating_carrier_region",
-    "flight_date",
-    "final_arrival_delay_minutes",
-  ].every((field) => requiredFact(facts, field));
+  const factsReady = [...requiredToContinue].every((field) => requiredFact(facts, field));
   const latestAirlineReply =
     replyHistory.filter((event) => event.author === "airline").at(-1)?.text ??
     "";
@@ -181,6 +181,18 @@ function MomoHome() {
     reply: "Step 3 of 4: add the airline's reply",
     draft: "Step 4 of 4: review your message",
   }[screen];
+  const companion = useMemo<{ mood: MomoMood; message: string }>(() => {
+    if (screen === "start") return { mood: "hello", message: "Tell me what happened. I’ll organise the clear details, or you can fill in the form yourself." };
+    if (screen === "facts") {
+      const missing = facts.filter((fact) => requiredToContinue.has(fact.field) && !requiredFact(facts, fact.field)).map((fact) => fact.label);
+      return missing.length
+        ? { mood: "listening", message: `I still need ${missing.slice(0, 2).join(" and ")}${missing.length > 2 ? ", plus a few more details" : ""}.` }
+        : { mood: "thinking", message: "Your required details are ready. Check them, then I’ll explain the next step." };
+    }
+    if (screen === "result") return { mood: "thinking", message: assessment.caseState === "NEEDS_DETAIL" ? "I need one more detail before I can give a careful answer." : "I’ve checked the facts against Momo’s source-backed rules." };
+    if (screen === "reply") return { mood: replyStatus.startsWith("Momo is") ? "working" : "listening", message: "Paste the airline’s latest reply. I’ll help you turn it into a calm, editable next message." };
+    return { mood: "celebrating", message: "Read and edit this message before you send it. You stay in control." };
+  }, [assessment.caseState, facts, replyStatus, screen]);
 
   const startOwnCase = () => {
     const blank = createBlankFlightCase();
@@ -526,13 +538,16 @@ function MomoHome() {
         </Link>
         <AccountPanel onOpenClaim={loadClaim} onUserChange={setAccount} />
       </header>
+      <aside className="momo-companion" aria-live="polite" aria-label="Momo's guidance">
+        <MomoMascot mood={companion.mood} />
+        <p><b>Momo</b>{companion.message}</p>
+      </aside>
       {screen === "start" && (
         <>
           <SocialProofTicker />
           <section className="landing" id="momo-main">
-            <div className="hero-copy">
+              <div className="hero-copy">
               <div className="momo-welcome">
-                <MomoMoodCarousel />
                 <span className="speech">
                   Hello, I&apos;m Momo. What happened?
                 </span>
@@ -647,14 +662,12 @@ function MomoHome() {
           <section className="workspace" id="momo-main">
             {activeGuide && (
               <aside className="guide-intro" aria-label="Your selected guide">
-                <MomoMascot mood="listening" compact />
                 <div><p className="receipt-eyebrow">YOUR STARTING POINT</p><h2>{activeGuide.title}</h2><p>{activeGuide.description}</p><b>{activeGuide.nextAction}</b></div>
               </aside>
             )}
             {screen === "facts" && (
               <>
                 <div className="section-heading">
-                  <MomoMascot mood="thinking" compact />
                   <div>
                     <h1>Tell Momo the key details</h1>
                     <p>
@@ -687,8 +700,9 @@ function MomoHome() {
                     </option>
                   </select>
                 </label>
-                <StoryIntake onUse={(story, extracted) => { setFacts((current) => current.map((fact) => { const match = extracted.find((item) => item.field === fact.field); return match && (fact.value === null || fact.value === "" || fact.field === "one_booking") ? { ...fact, value: match.value, confirmed: false, sourceLabel: "Momo found this - please check" } : fact.id === "story" ? { ...fact, value: story, confirmed: false, sourceLabel: "Your private draft story" } : fact; })); setJourneyMessage(extracted.length ? "Momo filled the draft facts it could clearly find. Please check them, then add the remaining key details." : "Story saved. Next, add your flight number, travel date, final destination, arrival delay, and whether every flight was on one booking."); }} />
+                <StoryIntake onUse={(story, extracted, source) => { setFacts((current) => current.map((fact) => { const match = extracted.find((item) => item.field === fact.field); return match && (fact.value === null || fact.value === "" || fact.field === "one_booking") ? { ...fact, value: match.value, confirmed: false, sourceLabel: source === "ai" ? "Momo found this - please check" : "Momo spotted this - please check" } : fact.field === "traveller_story" ? { ...fact, value: story, confirmed: false, sourceLabel: "Your private draft story" } : fact; })); setJourneyMessage(extracted.length ? `Momo added ${extracted.length} draft detail${extracted.length === 1 ? "" : "s"}. Please check them${source === "ai" ? "" : " — these came from basic matching"}. Next, complete the remaining required details.` : "Momo saved your story but could not safely extract a fact. Complete the required fields below, or try a clearer description."); }} />
                 <div className="facts">
+                  <div className="fact" aria-label="What each label means"><div><b>Required to continue</b><small>You need these before Momo can move to an assessment. “Add if you know” improves the result later. “Optional” is never required.</small></div></div>
                   {facts
                     .filter((fact) => !["flight_distance_km", "traveller_story"].includes(fact.field))
                     .filter((fact) => !["cancellation_notice_days", "rerouting_arrival_delay_minutes"].includes(fact.field) || caseData.disruptionType === "cancellation")
@@ -782,20 +796,8 @@ function MomoHome() {
                             }
                           />
                         )}
-                        <Pill
-                          kind={
-                            fact.confirmed
-                              ? "green"
-                              : requiredFact(facts, fact.field)
-                                ? "blue"
-                                : "amber"
-                          }
-                        >
-                          {fact.confirmed
-                            ? "Checked"
-                            : requiredFact(facts, fact.field)
-                              ? "Added"
-                              : "Add if you know"}
+                        <Pill kind={requiredToContinue.has(fact.field) ? "blue" : optionalFacts.has(fact.field) ? "amber" : "green"}>
+                          {requiredToContinue.has(fact.field) ? "Required to continue" : optionalFacts.has(fact.field) ? "Optional" : "Add if you know"}
                         </Pill>
                         {(fact.field === "departure_airport" || fact.field === "arrival_airport") && (
                           <AirportHelper onChoose={(code) => updateFact(fact.id, code)} />
@@ -869,7 +871,6 @@ function MomoHome() {
             {screen === "result" && (
               <>
                 <div className="section-heading">
-                  <MomoMascot mood="thinking" compact />
                   <div>
                     <h1>Here is what Momo found</h1>
                     <p>
@@ -967,7 +968,19 @@ function MomoHome() {
                   </small>
                 </section>
                 <GlobalRightsCard guidance={internationalGuidance} />
-                {activeGuide?.topic === "offer" && <OfferCompass amount={null} currency={null} />}
+                {activeGuide?.topic === "offer" && (
+                  <>
+                    <OfferCompass amount={null} currency={null} />
+                    <aside className="guide-intro offer-next-step" aria-label="Next step for comparing an offer">
+                      <div>
+                        <p className="receipt-eyebrow">ONE MORE THING</p>
+                        <h2>Add your flight details to compare properly</h2>
+                        <p>Momo can record the offer now. Add the route, airline, date, and disruption details before it can safely show a possible compensation estimate.</p>
+                        <button className="primary" onClick={() => setScreen("facts")}>Add flight details <span>&rarr;</span></button>
+                      </div>
+                    </aside>
+                  </>
+                )}
                 <TrustReceipt
                   assessment={assessment}
                   facts={facts}
@@ -1023,7 +1036,6 @@ function MomoHome() {
             {screen === "reply" && (
               <>
                 <div className="section-heading">
-                  <MomoMascot mood="listening" compact />
                   <div>
                     <h1>Talk through the airline&apos;s replies</h1>
                     <p>
@@ -1037,7 +1049,6 @@ function MomoHome() {
                   aria-label="Your claim conversation"
                 >
                   <div className="chat-intro">
-                    <MomoMascot mood={replyStatus ? "working" : "listening"} compact />
                     <div>
                       <b>Momo</b>
                       <p>
@@ -1114,9 +1125,10 @@ function MomoHome() {
                       <small>PDF, PNG, or JPG up to 3 MB. Momo extracts the useful wording into the editable box; do not upload passports, payment cards, or identity documents.</small>
                       {evidenceStatus && <p className="insight-message" role="status">{evidenceStatus}</p>}
                     </div>
+                    <p className="reply-action-hint">Ready for help? Choose <b>Ask Momo for a reply</b>. <b>Save for later</b> only stores the text in this conversation.</p>
                     <div className="reply-actions">
                       <button className="secondary" onClick={addReply}>
-                        Add airline reply
+                        Save for later
                       </button>
                       <button
                         className="primary"
@@ -1158,7 +1170,6 @@ function MomoHome() {
             {screen === "draft" && (
               <>
                 <div className="section-heading">
-                  <MomoMascot mood="celebrating" compact />
                   <div>
                     <h1>Your editable message</h1>
                     <p>
