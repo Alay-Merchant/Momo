@@ -26,6 +26,11 @@ test("model analysis rejects unsupported legal or eligibility conclusions", () =
   assert.equal(parseRejectionAnalysis(JSON.stringify({ summary: "You are entitled to payment.", strategy: "Demand payment.", claims: [{ quote: "technical fault", status: "unsupported", explanation: "The airline is legally liable.", question: "Why?" }] }), reply), null);
 });
 
+test("model analysis rejects an invented disruption cause or number", () => {
+  assert.equal(parseReplyAnalysis(JSON.stringify({ explanation: "The airline says a crew shortage caused the delay.", questions: ["What crew event happened?"] }), reply), null);
+  assert.equal(parseRejectionAnalysis(JSON.stringify({ summary: "The airline cited technical trouble.", strategy: "Ask what happened in 2025.", claims: [{ quote: "technical fault", status: "incomplete", explanation: "The reason needs more detail.", question: "What happened?" }] }), reply), null);
+});
+
 test("deterministic dissection treats operational and technical explanations as incomplete", () => {
   const analysis = fallbackRejectionAnalysis(reply);
   assert.equal(analysis?.claims[0].status, "incomplete");

@@ -44,6 +44,17 @@ export async function jsonBody(request: NextRequest, maxBytes = 12_000): Promise
   return { body };
 }
 
+/** Reject a large or chunked multipart body before Next parses it into memory. */
+export function safeMultipartBody(request: NextRequest, maxFileBytes: number) {
+  const contentType = request.headers.get("content-type") ?? "";
+  const contentLength = Number(request.headers.get("content-length") ?? "");
+  // Multipart boundaries and the field name add a little overhead to the file.
+  const maxPayloadBytes = maxFileBytes + 128 * 1024;
+  if (!contentType.toLowerCase().startsWith("multipart/form-data")) return "Choose a file using Momo's upload control.";
+  if (!Number.isFinite(contentLength) || contentLength < 1 || contentLength > maxPayloadBytes) return "That upload is too large or could not be safely measured.";
+  return null;
+}
+
 export function momoSupportContext(reply: unknown, assessment: unknown) {
   if (typeof reply !== "string" || typeof assessment !== "string") return false;
   const context = `${reply}\n${assessment}`.toLowerCase();
