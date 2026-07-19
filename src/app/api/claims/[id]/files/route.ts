@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isSafeEvidence, MAX_FILE_BYTES, safeEvidenceName } from "@/lib/claim-security";
 import { rateLimit } from "@/lib/auth-store";
-import { clientIp, sameOrigin } from "@/lib/request-security";
+import { clientIp, safeMultipartBody, sameOrigin } from "@/lib/request-security";
 import { createSupabaseRouteClient } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
@@ -9,6 +9,8 @@ export const runtime = "nodejs";
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!sameOrigin(request)) return NextResponse.json({ error: "This request was blocked for safety." }, { status: 403 });
   if (!rateLimit(`claim-file:${clientIp(request)}`)) return NextResponse.json({ error: "Please wait before uploading another file." }, { status: 429 });
+  const sizeError = safeMultipartBody(request, MAX_FILE_BYTES);
+  if (sizeError) return NextResponse.json({ error: sizeError }, { status: 413 });
   const response = NextResponse.json({ ok: true }); const supabase = createSupabaseRouteClient(request, response);
   const { data: { user } } = await supabase.auth.getUser(); if (!user) return NextResponse.json({ error: "Please sign in to save evidence." }, { status: 401 });
   const form = await request.formData().catch(() => null); const file = form?.get("file");

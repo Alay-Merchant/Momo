@@ -12,8 +12,8 @@ test("every visible Help topic has a tailored destination", () => {
   }
 });
 
-test("airline refusal and offer guides do not route to a generic facts screen", () => {
+test("airline refusal opens reply analysis while offer comparison starts with assessment facts", () => {
   assert.equal(getHelpGuide("rejection")?.screen, "reply");
-  assert.equal(getHelpGuide("offer")?.screen, "result");
+  assert.equal(getHelpGuide("offer")?.screen, "facts");
   assert.equal(getHelpGuide("lookup")?.screen, "facts");
 });

@@ -4,9 +4,13 @@ Momo helps a traveller turn an airline's vague disruption response into a source
 
 Momo is not a law firm, does not provide legal advice, does not promise compensation, and never sends a claim for the traveller.
 
+## Licence
+
+Copyright © 2026 Alay Merchant. All rights reserved. Momo is proprietary software: the repository may be viewed for evaluation, but it may not be copied, reused, modified, distributed, or used commercially without prior written permission. See [LICENSE](LICENSE).
+
 ## Live demo
 
-Add the deployed demo URL here before submission.
+[Try the live demo](https://askmomo.vercel.app/)
 
 For a no-login demo, choose **Paste an airline reply**, select a sample refusal, review Momo's explanation, and open the editable draft.
 
@@ -55,6 +59,14 @@ Before public-scale launch, use a durable distributed rate limit, malware/quaran
 
 Codex accelerated product architecture, deterministic rule-engine safeguards, refusal-analysis UI, connected-journey design, security hardening, mobile QA, and automated testing. GPT-5.6 is deliberately bounded to structured airline-reply analysis and drafting assistance; deterministic validation remains in control.
 
+## For hackathon judges
+
+Momo is submitted to **Apps for Your Life**. The fastest no-login test is: choose **Paste an airline reply**, select a sample refusal, review the exact-quote analysis, then open and edit the draft. Also try the weather sample: Momo should remain cautious rather than treating every disruption as a compensation claim.
+
+The main technical distinction is that GPT-5.6 is constrained to evidence extraction and neutral drafting. A deterministic TypeScript receipt controls scope, fact gates, compensation bands, source cards, and uncertainty; unsupported model facts, quotes, amounts, citations, threats, guarantees, and legal conclusions are rejected.
+
+The Codex feedback Session ID is provided in the Devpost submission's `/feedback` field. The public demo video shows the complete no-login journey and explains the Codex and GPT-5.6 contribution.
+
 ## Local setup
 
 Requirements: Node.js 20+ and a Supabase project for accounts/saved claims. OpenAI is optional for the bounded analysis feature.
@@ -73,9 +85,10 @@ Use your own values locally and in your deployment platform. Do not publish valu
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
-MOMO_SESSION_SECRET=
+MOMO_RATE_LIMIT_SALT=
+MOMO_GUEST_AI_DAILY_LIMIT=30
 OPENAI_API_KEY=
 MOMO_AI_PROVIDER=openai
 MOMO_AI_MODE=gpt56_review
@@ -88,7 +101,7 @@ Optional integrations are documented in `.env.example`.
 
 ## Database setup
 
-Apply the project SQL migrations in the Supabase SQL Editor, including community insights, claim timeline, outcome hardening, social proof, and unresolved-feedback migrations. Confirm Row Level Security policies before enabling accounts or evidence storage.
+Apply the project SQL files in the Supabase SQL Editor, including community insights, claim timeline, outcome hardening, social proof, unresolved feedback, and `ai-rate-limits.sql`. Confirm Row Level Security policies before enabling accounts or evidence storage. Set a private `MOMO_RATE_LIMIT_SALT` and keep the service-role key server-only so expensive guest AI routes have a durable, privacy-preserving quota.
 
 ## Test and verify
 

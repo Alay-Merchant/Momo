@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import AccountPanel, { type AccountUser } from "@/app/account-panel";
 import AirportHelper from "@/app/airport-helper";
@@ -116,6 +116,7 @@ function MomoHome() {
   const [evidenceStatus, setEvidenceStatus] = useState("");
   const [isReadingEvidence, setIsReadingEvidence] = useState(false);
   const [activeGuide, setActiveGuide] = useState<HelpGuide | null>(null);
+  const latestMomoReplyRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     const topic = new URLSearchParams(window.location.search).get("help");
@@ -246,9 +247,9 @@ function MomoHome() {
     setScreen(guide.screen);
   };
   const goTo = (next: Screen) => {
-    if ((next === "result" || next === "reply") && !factsReady)
+    if (next === "result" && !factsReady)
       return setJourneyMessage(
-        "Before continuing, add your flight number, journey, departure and destination regions, operating airline region, travel date, and arrival delay.",
+        "Before checking an assessment, add your flight number, journey, departure and destination regions, operating airline region, travel date, and arrival delay. You can still paste an airline reply without these details.",
       );
     if (next === "draft" && !generatedDraft)
       return setJourneyMessage(
@@ -427,6 +428,7 @@ function MomoHome() {
       setReplyStatus(
         `${reviewTier === "deep" ? "Deeper" : "Quick"} review complete. Momo prepared a draft using your confirmed facts. Please read and edit it before sending.`,
       );
+      window.setTimeout(() => latestMomoReplyRef.current?.focus(), 0);
     } catch {
       setReplyStatus(
         "Momo could not connect right now. Your airline reply is still kept in this browser.",
@@ -538,7 +540,7 @@ function MomoHome() {
         </Link>
         <AccountPanel onOpenClaim={loadClaim} onUserChange={setAccount} />
       </header>
-      <aside className="momo-companion" aria-live="polite" aria-label="Momo's guidance">
+      <aside className={`momo-companion ${screen === "start" ? "landing-companion" : ""}`} aria-live="polite" aria-label="Momo's guidance">
         <MomoMascot mood={companion.mood} />
         <p><b>Momo</b>{companion.message}</p>
       </aside>
@@ -621,6 +623,7 @@ function MomoHome() {
             <button
               type="button"
               onClick={() => goTo("result")}
+              disabled={!factsReady}
               className={
                 screen === "result"
                   ? "active"
@@ -645,6 +648,7 @@ function MomoHome() {
             <button
               type="button"
               onClick={() => goTo("draft")}
+              disabled={!generatedDraft}
               className={screen === "draft" ? "active" : ""}
               aria-current={screen === "draft" ? "step" : undefined}
             >
@@ -659,6 +663,7 @@ function MomoHome() {
               {journeyMessage}
             </p>
           )}
+          {!factsReady && <p className="step-note">Add the required flight details before opening Momo&apos;s assessment. You can still paste an airline reply at any time.</p>}
           <section className="workspace" id="momo-main">
             {activeGuide && (
               <aside className="guide-intro" aria-label="Your selected guide">
@@ -968,19 +973,6 @@ function MomoHome() {
                   </small>
                 </section>
                 <GlobalRightsCard guidance={internationalGuidance} />
-                {activeGuide?.topic === "offer" && (
-                  <>
-                    <OfferCompass amount={null} currency={null} />
-                    <aside className="guide-intro offer-next-step" aria-label="Next step for comparing an offer">
-                      <div>
-                        <p className="receipt-eyebrow">ONE MORE THING</p>
-                        <h2>Add your flight details to compare properly</h2>
-                        <p>Momo can record the offer now. Add the route, airline, date, and disruption details before it can safely show a possible compensation estimate.</p>
-                        <button className="primary" onClick={() => setScreen("facts")}>Add flight details <span>&rarr;</span></button>
-                      </div>
-                    </aside>
-                  </>
-                )}
                 <TrustReceipt
                   assessment={assessment}
                   facts={facts}
@@ -1070,9 +1062,12 @@ function MomoHome() {
                           className={`chat-bubble ${event.author}`}
                           key={event.id}
                         >
-                          <b>
+                          <h2
+                            ref={event.author === "momo" && event.id === replyHistory.at(-1)?.id ? latestMomoReplyRef : undefined}
+                            tabIndex={event.author === "momo" ? -1 : undefined}
+                          >
                             {event.author === "momo" ? "Momo" : "Airline reply"}
-                          </b>
+                          </h2>
                           <small>{event.addedAt}</small>
                           <p>{event.text}</p>
                           {event.author === "momo" && event.questions?.length ? (
@@ -1116,13 +1111,14 @@ function MomoHome() {
                         id="reply-evidence"
                         type="file"
                         accept="application/pdf,image/png,image/jpeg"
+                        aria-describedby="reply-evidence-help"
                         disabled={isReadingEvidence}
                         onChange={(event) => {
                           void readEvidence(event.target.files?.[0] ?? null);
                           event.currentTarget.value = "";
                         }}
                       />
-                      <small>PDF, PNG, or JPG up to 3 MB. Momo extracts the useful wording into the editable box; do not upload passports, payment cards, or identity documents.</small>
+                      <small id="reply-evidence-help">PDF, PNG, or JPG up to 3 MB. If OpenAI reading is enabled, it processes this file only to extract claim wording; Momo does not retain it. Do not upload passports, payment cards, or identity documents.</small>
                       {evidenceStatus && <p className="insight-message" role="status">{evidenceStatus}</p>}
                     </div>
                     <p className="reply-action-hint">Ready for help? Choose <b>Ask Momo for a reply</b>. <b>Save for later</b> only stores the text in this conversation.</p>
@@ -1161,7 +1157,7 @@ function MomoHome() {
                   <button className="secondary" onClick={() => goTo("result")}>
                     Back
                   </button>
-                  <button className="primary" onClick={() => goTo("draft")}>
+                  <button className="primary" disabled={!generatedDraft} onClick={() => goTo("draft")}>
                     Open latest message <span>→</span>
                   </button>
                 </div>

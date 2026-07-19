@@ -1,3 +1,5 @@
+import { isGroundedNarrative } from "@/lib/reply-analysis";
+
 export type ClaimCheck = "needs_check" | "incomplete" | "unsupported";
 export type RejectionClaim = { quote: string; status: ClaimCheck; explanation: string; question: string };
 export type RejectionAnalysis = { summary: string; claims: RejectionClaim[]; strategy: string };
@@ -16,7 +18,7 @@ export function parseRejectionAnalysis(value: string, airlineReply: string): Rej
       return { quote: clean(entry.quote, 320), status: entry.status, explanation: clean(entry.explanation, 420), question: clean(entry.question, 220) };
     }).filter((claim): claim is RejectionClaim => Boolean(claim.quote && claim.explanation && claim.question && typeof claim.status === "string" && statuses.has(claim.status as ClaimCheck) && airlineReply.includes(claim.quote))).slice(0, 3) : [];
     const text = `${summary}\n${strategy}\n${claims.map((claim) => `${claim.explanation}\n${claim.question}`).join("\n")}`;
-    return summary && strategy && claims.length && !prohibited.test(text) ? { summary, strategy, claims } : null;
+    return summary && strategy && claims.length && !prohibited.test(text) && isGroundedNarrative(text, airlineReply) ? { summary, strategy, claims } : null;
   } catch { return null; }
 }
 

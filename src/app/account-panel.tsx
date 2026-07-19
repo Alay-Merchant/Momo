@@ -34,9 +34,11 @@ export default function AccountPanel({
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [user, setUser] = useState<AccountUser | null>(null);
   const [message, setMessage] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
+  const accountMenuRef = useRef<HTMLDetailsElement>(null);
 
   const closeModal = () => {
     setOpen(false);
@@ -73,6 +75,22 @@ export default function AccountPanel({
     window.addEventListener("keydown", onKeyDown);
     return () => { window.clearTimeout(focusTimer); window.removeEventListener("keydown", onKeyDown); };
   }, [open]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const closeIfOutside = (event: PointerEvent) => {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target as Node)) setMenuOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+        accountMenuRef.current?.querySelector("summary")?.focus();
+      }
+    };
+    window.addEventListener("pointerdown", closeIfOutside);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => { window.removeEventListener("pointerdown", closeIfOutside); window.removeEventListener("keydown", closeOnEscape); };
+  }, [menuOpen]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -130,7 +148,7 @@ export default function AccountPanel({
     return (
       <div className="account">
         <span aria-label="Signed in">{"\u25cf"}</span>
-        <details>
+        <details ref={accountMenuRef} open={menuOpen} onToggle={(event) => setMenuOpen(event.currentTarget.open)}>
           <summary>{user.email}</summary>
           <div className="account-menu">
             <b>My saved claims</b>
