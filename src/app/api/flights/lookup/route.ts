@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { cleanFlightDate, cleanFlightNumber, toFlightLookupResult, type AeroDataBoxFlight } from "@/lib/flight-lookup";
 import { rateLimit } from "@/lib/auth-store";
 import { clientIp, jsonBody, sameOrigin } from "@/lib/request-security";
-import { createSupabaseRouteClient } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
@@ -12,10 +11,6 @@ export async function POST(request: NextRequest) {
   const body = parsed.body as { flightNumber?: unknown; flightDate?: unknown };
   const flightNumber = cleanFlightNumber(body.flightNumber); const flightDate = cleanFlightDate(body.flightDate);
   if (!flightNumber || !flightDate) return NextResponse.json({ error: "Enter a flight number and travel date in YYYY-MM-DD format." }, { status: 400 });
-  const response = NextResponse.json({ ok: true });
-  const supabase = createSupabaseRouteClient(request, response);
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Sign in to look up public flight data." }, { status: 401 });
   const apiKey = process.env.AERODATABOX_RAPIDAPI_KEY;
   if (!apiKey) return NextResponse.json({ error: "Public flight lookup is not configured yet. Add AERODATABOX_RAPIDAPI_KEY on the server." }, { status: 503 });
   const url = new URL(`https://aerodatabox.p.rapidapi.com/flights/Number/${encodeURIComponent(flightNumber)}/${flightDate}`);
@@ -27,6 +22,6 @@ export async function POST(request: NextRequest) {
     const flight = providerData.find((item) => item.number?.replace(/\s+/g, "").toUpperCase() === flightNumber) ?? providerData[0];
     if (!flight) return NextResponse.json({ error: "Momo could not find a matching public flight record." }, { status: 404 });
     const result = toFlightLookupResult(flight, flightNumber);
-    return NextResponse.json({ flight: result, notice: "Public flight data can be incomplete or use a different arrival definition. Check it before using it in a claim." }, { headers: response.headers });
+    return NextResponse.json({ flight: result, notice: "Public flight data can be incomplete or use a different arrival definition. Check it before using it in a claim." });
   } catch { return NextResponse.json({ error: "Momo could not reach the flight-data provider right now." }, { status: 502 }); }
 }

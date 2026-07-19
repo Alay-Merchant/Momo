@@ -8,6 +8,7 @@ import { createSupabaseAdminClient, createSupabaseRouteClient } from "@/lib/supa
 export const runtime = "nodejs";
 const OFFICIAL_DOMAINS = ["caa.co.uk", "europa.eu", "gov.uk"];
 const AIRLINE_DOMAINS: Record<string, string> = { "british airways": "britishairways.com", easyjet: "easyjet.com", ryanair: "ryanair.com", "virgin atlantic": "virginatlantic.com", klm: "klm.com", lufthansa: "lufthansa.com", airbus: "airbus.com" };
+const RESEARCH_MODEL = process.env.MOMO_OPENAI_RESEARCH_MODEL ?? process.env.MOMO_OPENAI_QUICK_MODEL ?? "gpt-5.6-luna";
 
 function topicKey(airline: string, disruptionType: string, band: string, reason: string) {
   return [airline.toLowerCase(), disruptionType, band, reason].join(":");
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   try {
     const result = await client.responses.create({
-      model: "gpt-5.6-luna",
+      model: RESEARCH_MODEL,
       reasoning: { effort: "low" },
       tools: [{ type: "web_search", search_context_size: "low", filters: { allowed_domains: airlineDomain ? [...OFFICIAL_DOMAINS, airlineDomain] : OFFICIAL_DOMAINS } }],
       include: ["web_search_call.action.sources"],

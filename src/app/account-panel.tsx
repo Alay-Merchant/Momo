@@ -79,38 +79,51 @@ export default function AccountPanel({
     setMessage("");
     const endpoint =
       mode === "reset" ? "reset" : mode === "login" ? "login" : "register";
-    const response = await fetch(`/api/auth/${endpoint}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        mode === "reset"
-          ? { email }
-          : mode === "register"
-            ? { email, password, termsAccepted }
-            : { email, password },
-      ),
-    });
-    const data = await response.json();
-    if (!response.ok)
-      return setMessage(data.error ?? "Something went wrong. Please try again.");
-    if (mode === "reset")
-      return setMessage(data.message ?? "Check your email for a password-reset link.");
-    if (data.needsEmailConfirmation)
-      return setMessage(data.message ?? "Check your email to confirm your account, then sign in.");
-    update(data.user);
-    setOpen(false);
-    setPassword("");
+    try {
+      const response = await fetch(`/api/auth/${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          mode === "reset"
+            ? { email }
+            : mode === "register"
+              ? { email, password, termsAccepted }
+              : { email, password },
+        ),
+      });
+      const data = await response.json();
+      if (!response.ok)
+        return setMessage(data.error ?? "Something went wrong. Please try again.");
+      if (mode === "reset")
+        return setMessage(data.message ?? "Check your email for a password-reset link.");
+      if (data.needsEmailConfirmation)
+        return setMessage(data.message ?? "Check your email to confirm your account, then sign in.");
+      update(data.user);
+      setOpen(false);
+      setPassword("");
+    } catch {
+      setMessage("Momo could not reach the account service. Please check your connection and try again.");
+    }
   };
 
   const logout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    update(null);
+    try {
+      const response = await fetch("/api/auth/logout", { method: "POST" });
+      if (!response.ok) return setMessage("Momo could not sign you out right now. Please try again.");
+      update(null);
+    } catch {
+      setMessage("Momo could not reach the account service. Please try again.");
+    }
   };
 
   const withdrawWins = async () => {
-    const response = await fetch("/api/social-proof/withdraw", { method: "POST" });
-    const data = await response.json();
-    setMessage(data.message ?? data.error ?? "Momo could not update this choice.");
+    try {
+      const response = await fetch("/api/social-proof/withdraw", { method: "POST" });
+      const data = await response.json();
+      setMessage(data.message ?? data.error ?? "Momo could not update this choice.");
+    } catch {
+      setMessage("Momo could not reach the account service. Please try again.");
+    }
   };
 
   if (user) {

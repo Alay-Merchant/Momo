@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cleanEmail, rateLimit, validPassword } from "@/lib/auth-store";
 import { createSupabaseRouteClient, userPayload } from "@/lib/supabase-server";
 import { clientIp, jsonBody, sameOrigin } from "@/lib/request-security";
+import { MOMO_TERMS_VERSION } from "@/lib/legal";
 
 export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
@@ -13,7 +14,7 @@ export async function POST(request: NextRequest) {
   if (body?.termsAccepted !== true) return NextResponse.json({ error: "Please read and accept Momo's Terms to create an account." }, { status: 400 });
   const response = NextResponse.json({ ok: true }, { status: 201 });
   const supabase = createSupabaseRouteClient(request, response);
-  const { data, error } = await supabase.auth.signUp({ email, password: body.password, options: { emailRedirectTo: new URL("/", request.url).origin, data: { terms_accepted: true, terms_version: "2026-07-15" } } });
+  const { data, error } = await supabase.auth.signUp({ email, password: body.password, options: { emailRedirectTo: new URL("/", request.url).origin, data: { terms_accepted: true, terms_version: MOMO_TERMS_VERSION } } });
   if (error) {
     const isEmailRateLimit = /rate limit|too many requests/i.test(error.message);
     return NextResponse.json({ error: isEmailRateLimit ? "Supabase has temporarily paused confirmation emails. For local testing, turn off Confirm email in Supabase Authentication → Providers → Email, then try again." : error.message }, { status: isEmailRateLimit ? 429 : 400 });

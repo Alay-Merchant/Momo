@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import MomoMascot from "@/app/momo-mascot";
 import type { FlightLookupResult } from "@/lib/flight-lookup";
 
 function localDate(value: string) {
@@ -71,7 +70,6 @@ export default function FlightLookup({
       <button className="secondary" onClick={lookup} disabled={loading}>
         {loading ? "Looking up flight…" : "Find public flight times"}
       </button>
-      {loading && <MomoMascot mood="working" compact />}
       <div className="manual-delay">
         <label htmlFor="manual-delay">Or type how late you arrived</label>
         <input id="manual-delay" value={manualDelay} onChange={(event) => setManualDelay(event.target.value)} placeholder="For example: 2h 30m" />
