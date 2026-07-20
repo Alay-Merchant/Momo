@@ -540,10 +540,10 @@ function MomoHome() {
         </Link>
         <AccountPanel onOpenClaim={loadClaim} onUserChange={setAccount} />
       </header>
-      <aside className={`momo-companion ${screen === "start" ? "landing-companion" : ""}`} aria-live="polite" aria-label="Momo's guidance">
+      {screen !== "start" && <aside className="momo-companion" aria-live="polite" aria-label="Momo's guidance">
         <MomoMascot mood={companion.mood} />
         <p><b>Momo</b>{companion.message}</p>
-      </aside>
+      </aside>}
       {screen === "start" && (
         <>
           <SocialProofTicker />

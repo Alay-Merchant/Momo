@@ -12,7 +12,7 @@ Copyright © 2026 Alay Merchant. All rights reserved. Momo is proprietary softwa
 
 [Try the live demo](https://askmomo.vercel.app/)
 
-For a no-login demo, choose **Paste an airline reply**, select a sample refusal, review Momo's explanation, and open the editable draft.
+For a no-login demo, choose **Paste an airline reply**, select a sample refusal, review Momo's explanation, and open the editable draft. You can also enter fictional required details to see how Momo guides the next step.
 
 ## What it does
 
@@ -23,6 +23,7 @@ For a no-login demo, choose **Paste an airline reply**, select a sample refusal,
 - Analyses an airline refusal using exact passenger-provided quotes and neutral follow-up questions.
 - Compares airline offers with explicit currencies, including labelled unsupported currencies without unsafe conversion.
 - Supports private accounts, saved claims, evidence metadata, outcomes, and unresolved-case feedback.
+- Keeps the landing page calm with Momo beside the title; once a case starts, Momo becomes a contextual helper that stays with the traveller through the workflow.
 
 ## How it works
 
@@ -53,7 +54,7 @@ The deterministic rules engine is the authority for scope, fact gates, compensat
 - The visible Momo wins ticker uses demo examples until a verified, opt-in outcome workflow exists.
 - Never commit `.env.local`, service-role credentials, API keys, real correspondence, booking references, or personal documents.
 
-Before public-scale launch, use a durable distributed rate limit, malware/quarantine scanning for uploads, and solicitor/privacy review.
+Before public-scale launch, configure the included durable AI rate-limit migration and server-only rate-limit salt, add malware/quarantine scanning for uploads, and obtain solicitor/privacy review.
 
 ## Built with Codex and GPT-5.6
 
