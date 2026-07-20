@@ -1,29 +1,47 @@
 # Momo — three-minute hackathon demo
 
-## 0:00–0:20 — The problem
+## 0:00–0:18 — The problem
 
-“When an airline sends a vague refusal, passengers are left guessing whether the reason really answers their claim. Momo turns that message into a careful next step, without letting AI invent the legal answer.”
+“Flight disruption is stressful. But often the hardest part comes afterwards: the airline sends a vague refusal, a small voucher, or an explanation you cannot tell is meaningful. Momo helps travellers turn that reply into a calm, source-backed next message.”
 
-Show the Momo home screen and choose **Paste an airline reply**.
+Show the Momo landing page. Note that Momo stays beside the title on this calm starting screen, then becomes a contextual helper once the traveller begins a case.
 
-## 0:20–1:20 — Vague refusal, transparent assessment
+## 0:18–0:42 — The promise
 
-Choose **Technical fault described as extraordinary**. Show the confirmed facts, Trust Receipt, and official source cards. Explain that the UK/EU rules engine—not the language model—sets scope, fact gates, compensation bands, uncertainty, and approved sources.
+Choose **Paste an airline reply**, then select the technical-fault demo refusal.
 
-Open the reply analysis. Show the airline-position summary, exact quote, “incomplete” label, and the neutral question for the airline. Open the editable message. Say: “Momo never sends this; the passenger remains in control.”
+“Momo’s core promise is simple: it turns an airline’s vague refusal into an editable response, without letting AI invent the legal answer. You can start without an account and use a sample case immediately.”
 
-## 1:20–2:05 — Bounded GPT-5.6
+## 0:42–1:13 — Show the assessment
 
-Explain: “GPT-5.6 reads only the passenger-supplied correspondence into a constrained schema. Momo validates it against the text and the deterministic decision receipt. Unsupported amounts, citations, guarantees, threats, and legal conclusions are dropped.”
+Show flight facts, Momo’s assessment, and official source cards.
 
-Show the reply conversation and the editable draft. Mention the deterministic fallback works if the provider is unavailable or output is invalid.
+“Momo separates confirmed facts from what is still unknown. Its deterministic TypeScript rules engine—not the language model—decides scope, fact gates, compensation bands, uncertainty, and official sources.”
 
-## 2:05–2:35 — A responsible ‘no’
+## 1:13–1:47 — Rejection Dissector
 
-Choose **Weather explanation — check before pursuing**. Show that Momo does not manufacture a compensation demand: it asks for detail and tells the user that compensation may not be appropriate if severe weather is substantiated.
+Show the airline-reply analysis, exact quote, status, next question, then open the draft.
 
-## 2:35–3:00 — Closing and build story
+“The Rejection Dissector shows what the airline actually said. Momo uses exact passenger-provided quotes, flags explanations that are incomplete or need checking, and proposes a neutral next question. The traveller can edit the draft, but Momo never sends it.”
 
-“Momo is an Apps for Your Life tool for a stressful real-life moment. Codex helped us build the rule-engine guardrails, accessible interface, test coverage, security checks, and GPT-5.6 structured analysis. The live demo has a no-login sample journey; the repository documents its limits, setup, and tests.”
+## 1:47–2:10 — Demonstrate restraint
 
-Show the README architecture diagram, then the live Vercel URL. Do not include real correspondence, credentials, or unconsented personal outcomes.
+Load the weather sample.
+
+“Momo does not treat every disruption as a claim. Here it stays cautious and asks for a flight-specific explanation instead of making a promise.”
+
+## 2:10–2:37 — Explain GPT-5.6 and Codex
+
+Show the README architecture diagram or visible source receipt.
+
+“GPT-5.6 is deliberately bounded: it extracts facts, identifies missing explanations, and suggests measured wording. Its output is validated against Momo’s deterministic decision receipt. Unsupported facts, quotes, amounts, citations, threats, guarantees, and legal conclusions are rejected.”
+
+“Codex helped build the rules architecture, safety controls, refusal-analysis flow, UI, accessibility work, security checks, and automated tests.”
+
+## 2:37–2:55 — Close
+
+Show the editable final draft, then the landing page.
+
+“Momo is a calmer advocate for the moment travellers feel powerless: when an airline gives them an answer that sounds final, but is not clear enough. It helps people ask the right next question—clearly, safely, and in their own voice.”
+
+Do not show real correspondence, credentials, or outcomes without explicit written consent.
